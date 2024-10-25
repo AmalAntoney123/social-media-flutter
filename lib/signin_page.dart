@@ -4,7 +4,13 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:incampus/admin/admin_dashboard.dart';
 import 'package:incampus/register_page.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:incampus/staff/teacher_dashboard.dart';
+import 'package:incampus/student/student_dashboard.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class SignInPage extends StatefulWidget {
   @override
@@ -17,14 +23,308 @@ class _SignInPageState extends State<SignInPage> {
   final _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
 
-  void _signIn() {
+  void _signIn() async {
     if (_formKey.currentState!.validate()) {
-      // Implement sign in logic here
+      try {
+        // Attempt to sign in with email and password
+        UserCredential userCredential =
+            await FirebaseAuth.instance.signInWithEmailAndPassword(
+          email: _emailController.text,
+          password: _passwordController.text,
+        );
+
+        print("User authenticated successfully: ${userCredential.user?.uid}");
+
+        // Check if this user also has Google provider
+        final signInMethods = await FirebaseAuth.instance
+            .fetchSignInMethodsForEmail(_emailController.text);
+
+        if (!signInMethods.contains('password')) {
+          // Ensure the email/password provider is preserved
+          try {
+            await userCredential.user?.reauthenticateWithCredential(
+              EmailAuthProvider.credential(
+                email: _emailController.text,
+                password: _passwordController.text,
+              ),
+            );
+          } catch (e) {
+            print("Reauthorization not needed: $e");
+          }
+        }
+
+        // Handle user data and navigation
+        await _handleUserData(userCredential.user!.uid);
+      } on FirebaseAuthException catch (e) {
+        _handleAuthError(e);
+      } catch (e) {
+        print("Unexpected error during sign in: $e");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text('An unexpected error occurred. Please try again later.'),
+          ),
+        );
+      }
     }
   }
 
-  void _signInWithGoogle() {
-    // Implement Google sign in logic here
+  Future<void> _signInWithGoogle() async {
+    try {
+      final GoogleSignIn googleSignIn = GoogleSignIn();
+      await googleSignIn.signOut();
+
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+      if (googleUser == null) return;
+
+      // Check if user exists in your database
+      final userQuery = await FirebaseDatabase.instance
+          .ref()
+          .child('users')
+          .orderByChild('email')
+          .equalTo(googleUser.email)
+          .once();
+
+      if (userQuery.snapshot.value == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Please register before using Google Sign-In.')),
+        );
+        await googleSignIn.signOut();
+        return;
+      }
+
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      // Check if email/password sign-in method exists
+      final signInMethods = await FirebaseAuth.instance
+          .fetchSignInMethodsForEmail(googleUser.email!);
+
+      UserCredential userCredential;
+
+      if (signInMethods.contains('password')) {
+        // If email/password exists, prompt for password to preserve the provider
+        String? password = await _promptForPassword();
+        if (password != null) {
+          try {
+            // First sign in with email/password
+            userCredential =
+                await FirebaseAuth.instance.signInWithEmailAndPassword(
+              email: googleUser.email!,
+              password: password,
+            );
+
+            // Then link with Google credential
+            if (!signInMethods.contains('google.com')) {
+              await userCredential.user?.linkWithCredential(credential);
+            }
+          } catch (e) {
+            print("Error linking accounts: $e");
+            // If linking fails, try direct Google sign-in
+            userCredential =
+                await FirebaseAuth.instance.signInWithCredential(credential);
+          }
+        } else {
+          // If user cancels password prompt, proceed with Google sign-in
+          userCredential =
+              await FirebaseAuth.instance.signInWithCredential(credential);
+        }
+      } else {
+        // If no email/password method, just sign in with Google
+        userCredential =
+            await FirebaseAuth.instance.signInWithCredential(credential);
+      }
+
+      // Handle user data and navigation
+      await _handleUserData(userCredential.user!.uid);
+    } catch (e) {
+      print("Error during Google sign in: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'An error occurred during Google sign in. Please try again.'),
+        ),
+      );
+      await GoogleSignIn().signOut();
+    }
+  }
+
+  Future<void> _handleUserData(String uid) async {
+    DatabaseEvent event =
+        await FirebaseDatabase.instance.ref().child('users').child(uid).once();
+
+    if (event.snapshot.value != null) {
+      Map<dynamic, dynamic> userData =
+          event.snapshot.value as Map<dynamic, dynamic>;
+      String role = userData['role'];
+      String status = userData['status'];
+
+      if (status != 'approved') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Your account is not yet approved. Please wait for admin approval.'),
+          ),
+        );
+        await FirebaseAuth.instance.signOut();
+        return;
+      }
+
+      _navigateBasedOnRole(role);
+    } else {
+      print("User data not found in the database");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('User data not found. Please try registering again.'),
+        ),
+      );
+      await FirebaseAuth.instance.signOut();
+    }
+  }
+
+  void _navigateBasedOnRole(String role) {
+    Widget dashboard;
+    switch (role) {
+      case 'admin':
+        dashboard = AdminDashboard();
+        break;
+      case 'Student':
+        dashboard = StudentDashboard();
+        break;
+      case 'Teacher':
+        dashboard = TeacherDashboard();
+        break;
+      default:
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unknown user role. Please contact support.')),
+        );
+        FirebaseAuth.instance.signOut();
+        return;
+    }
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => dashboard),
+    );
+  }
+
+  void _handleAuthError(FirebaseAuthException e) {
+    String errorMessage;
+    switch (e.code) {
+      case 'user-not-found':
+        errorMessage =
+            'No user found with this email. Please check your email or register.';
+        break;
+      case 'wrong-password':
+        errorMessage = 'Incorrect password. Please try again.';
+        break;
+      case 'invalid-email':
+        errorMessage =
+            'The email address is not valid. Please enter a valid email.';
+        break;
+      case 'user-disabled':
+        errorMessage =
+            'This account has been disabled. Please contact support.';
+        break;
+      default:
+        errorMessage =
+            'An error occurred while signing in. Please try again later. (${e.code})';
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(errorMessage)),
+    );
+  }
+
+  Future<String?> _promptForPassword() async {
+    String? password;
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Preserve Email/Password Sign-In'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                  'To maintain access to both email/password and Google sign-in methods, please enter your password.'),
+              SizedBox(height: 16),
+              TextField(
+                obscureText: true,
+                onChanged: (value) {
+                  password = value;
+                },
+                decoration: InputDecoration(
+                  hintText: "Password",
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              child: Text('Skip'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            ElevatedButton(
+              child: Text('Confirm'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+    return password;
+  }
+
+  Future<void> _forgotPassword() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please enter your email address')),
+      );
+      return;
+    }
+
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content:
+                Text('Password reset email sent. Please check your inbox.')),
+      );
+    } on FirebaseAuthException catch (e) {
+      String errorMessage;
+      switch (e.code) {
+        case 'invalid-email':
+          errorMessage = 'The email address is not valid.';
+          break;
+        case 'user-not-found':
+          errorMessage = 'No user found with this email address.';
+          break;
+        default:
+          errorMessage = 'An error occurred. Please try again later.';
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMessage)),
+      );
+    } catch (e) {
+      print('Error in forgot password: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content:
+                Text('An unexpected error occurred. Please try again later.')),
+      );
+    }
   }
 
   @override
@@ -289,10 +589,6 @@ class _SignInPageState extends State<SignInPage> {
         style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
       ),
     );
-  }
-
-  void _forgotPassword() {
-    // Implement forgot password functionality
   }
 
   void _navigateToRegister() {

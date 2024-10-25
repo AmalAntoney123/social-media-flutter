@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:math';
+import 'package:firebase_database/firebase_database.dart';
 
 class RegisterPage extends StatefulWidget {
   @override
@@ -22,27 +23,39 @@ class _RegisterPageState extends State<RegisterPage>
   final _departmentController = TextEditingController();
   String? _selectedRole;
   String? _selectedClassTeacher;
-  String? _selectedCourse;
+  String? _selectedDepartment;
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
   bool _isSubmitting = false;
 
-  List<String> _classTeachers = [];
-  List<String> _courses = ['MCA', 'MSc', 'BTech'];
+  Map<String, String> _departments = {};
+  Map<String, Map<String, dynamic>> _classTeachers = {};
+
   bool _isLoading = true;
 
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
 
-  Map<String, IconData> _courseIcons = {
+  Map<String, IconData> _departmentIcons = {
     'MCA': FontAwesomeIcons.laptopCode,
     'MSc': FontAwesomeIcons.flask,
     'BTech': FontAwesomeIcons.microchip,
   };
 
+  // Add this line to get a reference to the database
+  final DatabaseReference _database = FirebaseDatabase.instance.ref();
+
+  // Add these regex patterns
+  final _nameRegex = RegExp(r'^[a-zA-Z ]+$');
+  final _emailRegexStudent = RegExp(r'^[\w-\.]+@[\w-]+\.ajce\.in$');
+  final _emailRegexTeacher = RegExp(r'^[\w-\.]+@amaljyothi\.ac\.in$');
+  final _phoneRegex = RegExp(r'^[0-9]{10}$');
+  final _passwordRegex =
+      RegExp(r'^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$');
   @override
   void initState() {
     super.initState();
+    _loadDepartments();
     _loadClassTeachers();
     _controller =
         AnimationController(vsync: this, duration: const Duration(seconds: 1));
@@ -59,27 +72,34 @@ class _RegisterPageState extends State<RegisterPage>
     super.dispose();
   }
 
-  Future<void> _loadClassTeachers() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final querySnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .where('role', isEqualTo: 'class_teacher')
-          .get();
-
+  Future<void> _loadDepartments() async {
+    final snapshot =
+        await FirebaseDatabase.instance.ref().child('departments').once();
+    if (snapshot.snapshot.value != null) {
       setState(() {
-        _classTeachers =
-            querySnapshot.docs.map((doc) => doc['name'] as String).toList();
-        _isLoading = false;
+        _departments = Map<String, String>.from(snapshot.snapshot.value as Map);
       });
-    } catch (e) {
-      print('Error loading class teachers: $e');
+    }
+  }
+
+  Future<void> _loadClassTeachers() async {
+    final snapshot = await FirebaseDatabase.instance
+        .ref()
+        .child('users')
+        .orderByChild('role')
+        .equalTo('Teacher')
+        .once();
+    if (snapshot.snapshot.value != null) {
+      final Map<dynamic, dynamic> teachers =
+          snapshot.snapshot.value as Map<dynamic, dynamic>;
       setState(() {
-        _classTeachers = ['Error loading teachers'];
-        _isLoading = false;
+        _classTeachers = teachers.map((key, value) {
+          final teacher = value as Map<dynamic, dynamic>;
+          return MapEntry(key, {
+            'name': teacher['name'] as String,
+            'department': teacher['department'] as String,
+          });
+        });
       });
     }
   }
@@ -98,14 +118,14 @@ class _RegisterPageState extends State<RegisterPage>
       setState(() => _isSubmitting = true);
 
       try {
-        String generatedId =
-            _generateId(_selectedRole == 'Student' ? 'S' : 'T');
-
         UserCredential userCredential =
             await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: _emailController.text,
           password: _passwordController.text,
         );
+
+        String generatedId =
+            _generateId(_selectedRole == 'Student' ? 'S' : 'T');
 
         Map<String, dynamic> userData = {
           'uid': userCredential.user!.uid,
@@ -113,26 +133,26 @@ class _RegisterPageState extends State<RegisterPage>
           'email': _emailController.text,
           'phone': _phoneController.text,
           'role': _selectedRole,
-          'status': 'pending',
-          'timestamp': FieldValue.serverTimestamp(),
+          'status':
+              'pending', // Set status to 'pending' for both students and teachers
+          'timestamp': ServerValue.timestamp,
         };
 
         if (_selectedRole == 'Student') {
           userData['studentId'] = generatedId;
           userData['classTeacher'] = _selectedClassTeacher;
-          userData['course'] = _selectedCourse;
+          userData['department'] = _departments[_selectedDepartment];
         } else {
           userData['teacherId'] = generatedId;
-          userData['department'] = _departmentController.text;
+          userData['department'] = _departments[_selectedDepartment];
         }
 
-        await FirebaseFirestore.instance
-            .collection('registration_requests')
-            .add(userData);
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userCredential.user!.uid)
+        await _database
+            .child('users')
+            .child(userCredential.user!.uid)
             .set(userData);
+
+        // Remove the separate 'teachers' node creation
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -148,6 +168,34 @@ class _RegisterPageState extends State<RegisterPage>
       }
 
       setState(() => _isSubmitting = false);
+    }
+  }
+
+  Future<void> _createAdminUser() async {
+    try {
+      UserCredential userCredential =
+          await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: 'admin@mail.com',
+        password: 'admin123',
+      );
+
+      // Store admin data in Realtime Database
+      await _database.child('users').child(userCredential.user!.uid).set({
+        'uid': userCredential.user!.uid,
+        'name': 'Admin',
+        'email': 'admin@mail.com',
+        'role': 'admin',
+        'status': 'approved',
+        'timestamp': ServerValue.timestamp,
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Admin user created successfully')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to create admin user: $e')),
+      );
     }
   }
 
@@ -292,13 +340,16 @@ class _RegisterPageState extends State<RegisterPage>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _buildTextField(_nameController, 'Name', FontAwesomeIcons.user),
+                _buildTextField(_nameController, 'Name', FontAwesomeIcons.user,
+                    keyboardType: TextInputType.name),
                 SizedBox(height: 16),
                 _buildTextField(
-                    _emailController, 'Email', FontAwesomeIcons.envelope),
+                    _emailController, 'Email', FontAwesomeIcons.envelope,
+                    keyboardType: TextInputType.emailAddress),
                 SizedBox(height: 16),
                 _buildTextField(
-                    _phoneController, 'Phone Number', FontAwesomeIcons.phone),
+                    _phoneController, 'Phone Number', FontAwesomeIcons.phone,
+                    keyboardType: TextInputType.phone),
                 SizedBox(height: 16),
                 _buildPasswordField(_passwordController, 'Password',
                     FontAwesomeIcons.lock, _isPasswordVisible, () {
@@ -315,30 +366,15 @@ class _RegisterPageState extends State<RegisterPage>
                 }),
                 SizedBox(height: 16),
                 if (_selectedRole == 'Student') ...[
-                  _buildDropdownField(
-                    value: _selectedClassTeacher,
-                    label: 'Class Teacher',
-                    icon: FontAwesomeIcons.chalkboardUser,
-                    items: _classTeachers,
-                    onChanged: (value) =>
-                        setState(() => _selectedClassTeacher = value),
-                  ),
+                  _buildDepartmentDropdown(),
                   SizedBox(height: 16),
-                  _buildDropdownField(
-                    value: _selectedCourse,
-                    label: 'Course',
-                    icon: FontAwesomeIcons.graduationCap,
-                    items: _courses,
-                    itemIcons: _courseIcons,
-                    onChanged: (value) =>
-                        setState(() => _selectedCourse = value),
-                  ),
+                  if (_selectedDepartment != null) _buildClassTeacherDropdown(),
                 ],
-                if (_selectedRole == 'Teacher')
-                  _buildTextField(_departmentController, 'Department',
-                      FontAwesomeIcons.building),
+                if (_selectedRole == 'Teacher') _buildDepartmentDropdown(),
                 SizedBox(height: 24),
                 _buildRegisterButton(),
+                // SizedBox(height: 16),
+                // _buildCreateAdminButton(),
               ],
             ),
           ),
@@ -347,10 +383,108 @@ class _RegisterPageState extends State<RegisterPage>
     );
   }
 
+  Widget _buildDepartmentDropdown() {
+    return DropdownButtonFormField<String>(
+      value: _selectedDepartment,
+      decoration: InputDecoration(
+        labelText: 'Department',
+        prefixIcon: Container(
+          margin: const EdgeInsets.only(left: 12, right: 12),
+          child:
+              FaIcon(FontAwesomeIcons.building, color: Colors.white, size: 20),
+        ),
+        labelStyle: TextStyle(color: Colors.white70),
+        enabledBorder: OutlineInputBorder(
+          borderSide: BorderSide(color: Colors.white54),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderSide: BorderSide(color: Colors.white, width: 2),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.1),
+      ),
+      style: TextStyle(color: Colors.white),
+      dropdownColor: Colors.blue.shade800,
+      items: _departments.entries.map((entry) {
+        return DropdownMenuItem<String>(
+          value: entry.key,
+          child: Text(entry.value, style: TextStyle(color: Colors.white)),
+        );
+      }).toList(),
+      onChanged: (value) {
+        setState(() {
+          _selectedDepartment = value;
+          _selectedClassTeacher =
+              null; // Reset class teacher when department changes
+        });
+      },
+      validator: (value) {
+        if (value == null || value.isEmpty) {
+          return 'Please select a department';
+        }
+        return null;
+      },
+    );
+  }
+
+  Widget _buildClassTeacherDropdown() {
+    final filteredTeachers = _classTeachers.entries
+        .where((entry) =>
+            entry.value['department'] == _departments[_selectedDepartment])
+        .toList();
+
+    return DropdownButtonFormField<String>(
+      value: _selectedClassTeacher,
+      decoration: InputDecoration(
+        labelText: 'Class Teacher',
+        prefixIcon: Container(
+          margin: const EdgeInsets.only(left: 12, right: 12),
+          child: FaIcon(FontAwesomeIcons.chalkboardUser,
+              color: Colors.white, size: 20),
+        ),
+        labelStyle: TextStyle(color: Colors.white70),
+        enabledBorder: OutlineInputBorder(
+          borderSide: BorderSide(color: Colors.white54),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderSide: BorderSide(color: Colors.white, width: 2),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.1),
+      ),
+      style: TextStyle(color: Colors.white),
+      dropdownColor: Colors.blue.shade800,
+      items: filteredTeachers.map((entry) {
+        return DropdownMenuItem<String>(
+          value: entry.key,
+          child:
+              Text(entry.value['name'], style: TextStyle(color: Colors.white)),
+        );
+      }).toList(),
+      onChanged: (value) {
+        setState(() {
+          _selectedClassTeacher = value;
+        });
+      },
+      validator: (value) {
+        if (value == null || value.isEmpty) {
+          return 'Please select a class teacher';
+        }
+        return null;
+      },
+    );
+  }
+
   Widget _buildTextField(
-      TextEditingController controller, String label, IconData icon) {
+      TextEditingController controller, String label, IconData icon,
+      {TextInputType? keyboardType}) {
     return TextFormField(
       controller: controller,
+      keyboardType: keyboardType,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Container(
@@ -374,11 +508,21 @@ class _RegisterPageState extends State<RegisterPage>
         if (value == null || value.isEmpty) {
           return 'Please enter $label';
         }
-        if (label == 'Email' && !value.contains('@')) {
-          return 'Please enter a valid email';
+        if (label == 'Name' && !_nameRegex.hasMatch(value)) {
+          return 'Please enter a valid name (letters and spaces only)';
         }
-        if (label == 'Phone Number' && value.length != 10) {
-          return 'Phone number must be 10 digits';
+        if (label == 'Email') {
+          if (_selectedRole == 'Student' &&
+              !_emailRegexStudent.hasMatch(value)) {
+            return 'Please enter a valid student email ending with .ajce.in';
+          }
+          if (_selectedRole == 'Teacher' &&
+              !_emailRegexTeacher.hasMatch(value)) {
+            return 'Please enter a valid teacher email ending with @amaljyothi.ac.in';
+          }
+        }
+        if (label == 'Phone Number' && !_phoneRegex.hasMatch(value)) {
+          return 'Please enter a valid 10-digit phone number';
         }
         return null;
       },
@@ -421,8 +565,8 @@ class _RegisterPageState extends State<RegisterPage>
         if (value == null || value.isEmpty) {
           return 'Please enter $label';
         }
-        if (value.length < 6) {
-          return '$label must be at least 6 characters long';
+        if (!_passwordRegex.hasMatch(value)) {
+          return '$label must be at least 8 characters long and contain at least one letter and one number';
         }
         if (label == 'Confirm Password' && value != _passwordController.text) {
           return 'Passwords do not match';
@@ -436,8 +580,7 @@ class _RegisterPageState extends State<RegisterPage>
     required String? value,
     required String label,
     required IconData icon,
-    required List<String> items,
-    Map<String, IconData>? itemIcons,
+    required List<Map<String, dynamic>> items,
     required void Function(String?) onChanged,
   }) {
     return DropdownButtonFormField<String>(
@@ -462,18 +605,11 @@ class _RegisterPageState extends State<RegisterPage>
       ),
       style: TextStyle(color: Colors.white),
       dropdownColor: Colors.blue.shade800,
-      items: items.map((String item) {
+      items: items.map((item) {
         return DropdownMenuItem<String>(
-          value: item,
-          child: Row(
-            children: [
-              if (itemIcons != null)
-                FaIcon(itemIcons[item] ?? FontAwesomeIcons.question,
-                    size: 16, color: Colors.white),
-              if (itemIcons != null) SizedBox(width: 10),
-              Text(item, style: TextStyle(color: Colors.white)),
-            ],
-          ),
+          value: item['id'] as String,
+          child: Text(item['name'] as String,
+              style: TextStyle(color: Colors.white)),
         );
       }).toList(),
       onChanged: onChanged,
@@ -502,6 +638,23 @@ class _RegisterPageState extends State<RegisterPage>
           ? CircularProgressIndicator(color: Colors.white)
           : Text('Register',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  Widget _buildCreateAdminButton() {
+    return ElevatedButton(
+      onPressed: _createAdminUser,
+      style: ElevatedButton.styleFrom(
+        foregroundColor: Colors.white,
+        backgroundColor: Colors.red.shade600,
+        padding: EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        elevation: 3,
+      ),
+      child: Text('Create Admin User',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
     );
   }
 }
