@@ -6,6 +6,11 @@ import 'package:incampus/student/feed_page.dart';
 import 'package:incampus/student/for_you_page.dart';
 import 'package:incampus/student/profile_page.dart';
 import 'package:incampus/student/reels_page.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:video_player/video_player.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 class StudentDashboard extends StatefulWidget {
   @override
@@ -65,32 +70,17 @@ class _StudentDashboardState extends State<StudentDashboard> {
         ),
       ),
       child: Scaffold(
-        appBar: AppBar(
-          title: Text('InCampus',
-              style: TextStyle(
-                  fontWeight: FontWeight.bold, color: _onSurfaceColor)),
-          actions: [
-            IconButton(
-              icon: Icon(Icons.notifications, color: _onSurfaceColor),
-              onPressed: () {
-                // TODO: Implement notifications page
-              },
-            ),
-            IconButton(
-              icon: Icon(Icons.chat, color: _onSurfaceColor),
-              onPressed: () {
-                // TODO: Implement chat page
-              },
-            ),
-          ],
-        ),
         body: _buildBody(),
         bottomNavigationBar: BottomNavigationBar(
           currentIndex: _currentIndex,
           onTap: (index) {
-            setState(() {
-              _currentIndex = index;
-            });
+            if (index == 2) {
+              _showNewContentDialog();
+            } else {
+              setState(() {
+                _currentIndex = index;
+              });
+            }
           },
           type: BottomNavigationBarType.fixed,
           showSelectedLabels: false,
@@ -114,8 +104,6 @@ class _StudentDashboardState extends State<StudentDashboard> {
         return FeedPage();
       case 1:
         return ForYouPage();
-      case 2:
-        return _buildNewPost();
       case 3:
         return ReelsPage();
       case 4:
@@ -125,9 +113,99 @@ class _StudentDashboardState extends State<StudentDashboard> {
     }
   }
 
-  Widget _buildNewPost() {
-    return Center(
-        child: Text('New Post', style: TextStyle(color: _onSurfaceColor)));
-    // TODO: Implement new post functionality
+  void _showNewContentDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Create New Content'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Icon(Icons.image),
+                title: Text('New Post'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _createNewPost();
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.videocam),
+                title: Text('New Reel'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _createNewReel();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _createNewPost() async {
+    final ImagePicker _picker = ImagePicker();
+    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+
+    if (image != null) {
+      File file = File(image.path);
+      String fileName = 'posts/${DateTime.now().millisecondsSinceEpoch}.jpg';
+
+      try {
+        // Upload image to Firebase Storage
+        TaskSnapshot snapshot =
+            await FirebaseStorage.instance.ref(fileName).putFile(file);
+        String downloadUrl = await snapshot.ref.getDownloadURL();
+
+        // Save post metadata to Firebase Realtime Database
+        String? userId = FirebaseAuth.instance.currentUser?.uid;
+        if (userId != null) {
+          await FirebaseDatabase.instance.ref('posts/$userId').push().set({
+            'imageUrl': downloadUrl,
+            'timestamp': ServerValue.timestamp,
+            'type': 'post',
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Post created successfully')));
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Failed to create post: $e')));
+      }
+    }
+  }
+
+  Future<void> _createNewReel() async {
+    final ImagePicker _picker = ImagePicker();
+    final XFile? video = await _picker.pickVideo(source: ImageSource.gallery);
+
+    if (video != null) {
+      File file = File(video.path);
+      String fileName = 'reels/${DateTime.now().millisecondsSinceEpoch}.mp4';
+
+      try {
+        // Upload video to Firebase Storage
+        TaskSnapshot snapshot =
+            await FirebaseStorage.instance.ref(fileName).putFile(file);
+        String downloadUrl = await snapshot.ref.getDownloadURL();
+
+        // Save reel metadata to Firebase Realtime Database
+        String? userId = FirebaseAuth.instance.currentUser?.uid;
+        if (userId != null) {
+          await FirebaseDatabase.instance.ref('reels/$userId').push().set({
+            'videoUrl': downloadUrl,
+            'timestamp': ServerValue.timestamp,
+            'type': 'reel',
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Reel created successfully')));
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Failed to create reel: $e')));
+      }
+    }
   }
 }
