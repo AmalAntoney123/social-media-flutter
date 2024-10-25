@@ -8,9 +8,9 @@ import 'package:incampus/student/profile_page.dart';
 import 'package:incampus/student/reels_page.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
-import 'package:video_player/video_player.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:video_compress/video_compress.dart';
 
 class StudentDashboard extends StatefulWidget {
   @override
@@ -182,26 +182,41 @@ class _StudentDashboardState extends State<StudentDashboard> {
     final XFile? video = await _picker.pickVideo(source: ImageSource.gallery);
 
     if (video != null) {
-      File file = File(video.path);
-      String fileName = 'reels/${DateTime.now().millisecondsSinceEpoch}.mp4';
+      File videoFile = File(video.path);
+      String videoFileName = 'reels/${DateTime.now().millisecondsSinceEpoch}.mp4';
 
       try {
+        // Generate thumbnail using video_compress
+        final thumbnailFile = await VideoCompress.getFileThumbnail(videoFile.path);
+        String thumbnailFileName = 'thumbnails/${DateTime.now().millisecondsSinceEpoch}.jpg';
+
         // Upload video to Firebase Storage
-        TaskSnapshot snapshot =
-            await FirebaseStorage.instance.ref(fileName).putFile(file);
-        String downloadUrl = await snapshot.ref.getDownloadURL();
+        TaskSnapshot videoSnapshot = await FirebaseStorage.instance
+            .ref(videoFileName)
+            .putFile(videoFile);
+        String videoUrl = await videoSnapshot.ref.getDownloadURL();
+
+        // Upload thumbnail to Firebase Storage
+        TaskSnapshot thumbnailSnapshot = await FirebaseStorage.instance
+            .ref(thumbnailFileName)
+            .putFile(thumbnailFile);
+        String thumbnailUrl = await thumbnailSnapshot.ref.getDownloadURL();
 
         // Save reel metadata to Firebase Realtime Database
         String? userId = FirebaseAuth.instance.currentUser?.uid;
         if (userId != null) {
           await FirebaseDatabase.instance.ref('reels/$userId').push().set({
-            'videoUrl': downloadUrl,
+            'videoUrl': videoUrl,
+            'thumbnailUrl': thumbnailUrl,
             'timestamp': ServerValue.timestamp,
             'type': 'reel',
           });
           ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text('Reel created successfully')));
         }
+
+        // Clean up: delete the temporary thumbnail file
+        await thumbnailFile.delete();
       } catch (e) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('Failed to create reel: $e')));

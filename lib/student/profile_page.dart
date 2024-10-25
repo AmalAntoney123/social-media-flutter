@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:incampus/student/edit_profile_page.dart';
 import 'package:incampus/student/post_detail_screen.dart';
+import 'package:incampus/student/reel_detail_screen.dart';
 import 'package:video_player/video_player.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -285,7 +286,16 @@ class _ProfilePageState extends State<ProfilePage>
       itemCount: _reels.length,
       itemBuilder: (context, index) {
         return GestureDetector(
-          onTap: () => _playReel(_reels[index]['videoUrl']),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ReelDetailScreen(
+                  videoUrl: _reels[index]['videoUrl'] ?? '',
+                ),
+              ),
+            );
+          },
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -302,30 +312,6 @@ class _ProfilePageState extends State<ProfilePage>
         );
       },
     );
-  }
-
-  void _playReel(String videoUrl) {
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (context) => Theme(
-        data: ThemeData.dark().copyWith(
-          primaryColor: _primaryColor,
-          scaffoldBackgroundColor: _backgroundColor,
-        ),
-        child: Scaffold(
-          appBar: AppBar(
-              title: Text('Reel', style: TextStyle(color: _onSurfaceColor))),
-          body: Center(
-            child: AspectRatio(
-              aspectRatio: 9 / 16,
-              child: VideoPlayer(VideoPlayerController.network(videoUrl)
-                ..initialize().then((_) {
-                  setState(() {});
-                })),
-            ),
-          ),
-        ),
-      ),
-    ));
   }
 
   @override
