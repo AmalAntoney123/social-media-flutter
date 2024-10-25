@@ -5,6 +5,7 @@ import 'package:incampus/student/edit_profile_page.dart';
 import 'package:incampus/student/post_detail_screen.dart';
 import 'package:incampus/student/reel_detail_screen.dart';
 import 'package:video_player/video_player.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 class ProfilePage extends StatefulWidget {
   @override
@@ -286,15 +287,25 @@ class _ProfilePageState extends State<ProfilePage>
       itemCount: _reels.length,
       itemBuilder: (context, index) {
         return GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ReelDetailScreen(
-                  videoUrl: _reels[index]['videoUrl'] ?? '',
+          onTap: () async {
+            try {
+              final ref = FirebaseStorage.instance
+                  .ref()
+                  .child(_reels[index]['videoUrl']);
+              final url = await ref.getDownloadURL();
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ReelDetailScreen(videoUrl: url),
                 ),
-              ),
-            );
+              );
+            } catch (e) {
+              print("Error getting download URL: $e");
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                    content: Text("Error loading video. Please try again.")),
+              );
+            }
           },
           child: Stack(
             fit: StackFit.expand,
