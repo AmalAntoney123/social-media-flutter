@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:incampus/student/notifications_page.dart';
 
 class FeedPage extends StatelessWidget {
   @override
@@ -11,7 +12,10 @@ class FeedPage extends StatelessWidget {
           IconButton(
             icon: Icon(Icons.notifications, color: Colors.white),
             onPressed: () {
-              // TODO: Implement notifications page
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => NotificationsPage()),
+              );
             },
           ),
           IconButton(

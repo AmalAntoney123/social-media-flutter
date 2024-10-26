@@ -11,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:video_compress/video_compress.dart';
+import 'package:incampus/student/notifications_page.dart';
 
 class StudentDashboard extends StatefulWidget {
   @override
@@ -86,12 +87,12 @@ class _StudentDashboardState extends State<StudentDashboard> {
           showSelectedLabels: false,
           showUnselectedLabels: false,
           items: [
-            BottomNavigationBarItem(icon: Icon(Icons.home), label: ''),
-            BottomNavigationBarItem(icon: Icon(Icons.search), label: ''),
-            BottomNavigationBarItem(icon: Icon(Icons.add_box), label: ''),
+            BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+            BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Search'),
+            BottomNavigationBarItem(icon: Icon(Icons.add_box), label: 'Add'),
             BottomNavigationBarItem(
-                icon: Icon(Icons.play_circle_outline), label: ''),
-            BottomNavigationBarItem(icon: Icon(Icons.person), label: ''),
+                icon: Icon(Icons.play_circle_outline), label: 'Reels'),
+            BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
           ],
         ),
       ),
@@ -187,15 +188,18 @@ class _StudentDashboardState extends State<StudentDashboard> {
 
     if (video != null) {
       File videoFile = File(video.path);
-      String videoFileName = 'reels/${DateTime.now().millisecondsSinceEpoch}.mp4';
+      String videoFileName =
+          'reels/${DateTime.now().millisecondsSinceEpoch}.mp4';
 
       // Prompt user for description
       String? description = await _getDescription(context, 'New Reel');
 
       try {
         // Generate thumbnail using video_compress
-        final thumbnailFile = await VideoCompress.getFileThumbnail(videoFile.path);
-        String thumbnailFileName = 'thumbnails/${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final thumbnailFile =
+            await VideoCompress.getFileThumbnail(videoFile.path);
+        String thumbnailFileName =
+            'thumbnails/${DateTime.now().millisecondsSinceEpoch}.jpg';
 
         // Upload video to Firebase Storage
         TaskSnapshot videoSnapshot = await FirebaseStorage.instance
@@ -250,7 +254,8 @@ class _StudentDashboardState extends State<StudentDashboard> {
             ),
             TextButton(
               child: Text('OK'),
-              onPressed: () => Navigator.of(context).pop(_descriptionController.text),
+              onPressed: () =>
+                  Navigator.of(context).pop(_descriptionController.text),
             ),
           ],
         );

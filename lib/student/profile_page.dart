@@ -4,7 +4,6 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:incampus/student/edit_profile_page.dart';
 import 'package:incampus/student/post_detail_screen.dart';
 import 'package:incampus/student/reel_detail_screen.dart';
-import 'package:reels_viewer/reels_viewer.dart';
 
 class ProfilePage extends StatefulWidget {
   @override
@@ -17,6 +16,7 @@ class _ProfilePageState extends State<ProfilePage>
   List<Map<String, dynamic>> _posts = [];
   List<Map<String, dynamic>> _reels = [];
   Map<String, dynamic> _userProfile = {};
+  int _friendsCount = 0;
 
   // Define dark theme colors
   final Color _primaryColor = Colors.black;
@@ -31,6 +31,7 @@ class _ProfilePageState extends State<ProfilePage>
     _tabController = TabController(length: 2, vsync: this);
     _loadUserProfile();
     _loadUserContent();
+    _loadFriendsCount();
   }
 
   void _loadUserProfile() async {
@@ -87,6 +88,33 @@ class _ProfilePageState extends State<ProfilePage>
     }
   }
 
+  void _loadFriendsCount() async {
+    String? userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId != null) {
+      DatabaseReference friendsRef =
+          FirebaseDatabase.instance.ref('users/$userId/friends');
+      friendsRef.onValue.listen((event) {
+        if (event.snapshot.value != null) {
+          setState(() {
+            _friendsCount = (event.snapshot.value as Map).length;
+          });
+        }
+      });
+    }
+  }
+
+  void _logout(BuildContext context) async {
+    try {
+      await FirebaseAuth.instance.signOut();
+      // Navigate to the login screen or home screen after logout
+      Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to log out: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Theme(
@@ -107,15 +135,17 @@ class _ProfilePageState extends State<ProfilePage>
         appBar: AppBar(
           title: Text(_userProfile['username'] ?? 'Profile',
               style: TextStyle(color: _onSurfaceColor)),
+          // Add actions back to include the drawer toggle icon
           actions: [
-            IconButton(
-              icon: Icon(Icons.menu, color: _onSurfaceColor),
-              onPressed: () {
-                // TODO: Implement menu options
-              },
+            Builder(
+              builder: (context) => IconButton(
+                icon: Icon(Icons.menu),
+                onPressed: () => Scaffold.of(context).openEndDrawer(),
+              ),
             ),
           ],
         ),
+        endDrawer: _buildDrawer(),
         body: Column(
           crossAxisAlignment:
               CrossAxisAlignment.start, // Align children to the start (left)
@@ -183,10 +213,8 @@ class _ProfilePageState extends State<ProfilePage>
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
         _buildStatColumn(_posts.length.toString(), 'Posts'),
-        _buildStatColumn(
-            _userProfile['followers']?.toString() ?? '0', 'Followers'),
-        _buildStatColumn(
-            _userProfile['following']?.toString() ?? '0', 'Following'),
+        _buildStatColumn(_friendsCount.toString(), 'Friends'),
+        _buildStatColumn(_reels.length.toString(), 'Reels'),
       ],
     );
   }
@@ -323,6 +351,34 @@ class _ProfilePageState extends State<ProfilePage>
           uploaderId: FirebaseAuth.instance.currentUser?.uid ?? '',
           description: _reels[startIndex]['description'] ?? '',
         ),
+      ),
+    );
+  }
+
+  Widget _buildDrawer() {
+    return Drawer(
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: <Widget>[
+          DrawerHeader(
+            decoration: BoxDecoration(
+              color: _primaryColor,
+            ),
+            child: Text(
+              'Menu',
+              style: TextStyle(
+                color: _onSurfaceColor,
+                fontSize: 24,
+              ),
+            ),
+          ),
+          ListTile(
+            leading: Icon(Icons.logout, color: _onSurfaceColor),
+            title: Text('Logout', style: TextStyle(color: _onSurfaceColor)),
+            onTap: () => _logout(context),
+          ),
+          // Add more ListTile widgets here for additional menu items
+        ],
       ),
     );
   }
