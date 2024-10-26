@@ -17,12 +17,14 @@ class _ReelsPageState extends State<ReelsPage> {
   bool _isLoading = false;
   int _currentIndex = 0;
   late PageController _pageController;
+  int _batchSize = 5;
+  int _initialLoadSize = 1;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
-    _loadReels();
+    _loadInitialReels();
   }
 
   @override
@@ -31,7 +33,18 @@ class _ReelsPageState extends State<ReelsPage> {
     super.dispose();
   }
 
-  Future<void> _loadReels() async {
+  Future<void> _loadInitialReels() async {
+    await _loadReels(_initialLoadSize);
+    if (_reels.isNotEmpty) {
+      _loadMoreReels();
+    }
+  }
+
+  Future<void> _loadMoreReels() async {
+    await _loadReels(_batchSize);
+  }
+
+  Future<void> _loadReels(int count) async {
     if (_isLoading) return;
     setState(() {
       _isLoading = true;
@@ -72,8 +85,15 @@ class _ReelsPageState extends State<ReelsPage> {
       newReels
           .sort((a, b) => (b['timestamp'] ?? 0).compareTo(a['timestamp'] ?? 0));
 
+      // Limit the number of new reels added
+      int startIndex = _reels.length;
+      int endIndex = startIndex + count;
+      if (endIndex > newReels.length) {
+        endIndex = newReels.length;
+      }
+
       setState(() {
-        _reels.addAll(newReels);
+        _reels.addAll(newReels.sublist(startIndex, endIndex));
         _isLoading = false;
       });
     } catch (e) {
@@ -97,8 +117,8 @@ class _ReelsPageState extends State<ReelsPage> {
                 setState(() {
                   _currentIndex = index;
                 });
-                if (index == _reels.length - 2) {
-                  _loadReels();
+                if (index >= _reels.length - 3) {
+                  _loadMoreReels();
                 }
               },
               itemBuilder: (context, index) {

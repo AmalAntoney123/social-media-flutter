@@ -20,6 +20,8 @@ class _ProfilePageState extends State<ProfilePage>
   List<Map<String, dynamic>> _reels = [];
   Map<String, dynamic> _userProfile = {};
   int _friendsCount = 0;
+  bool _postsLoading = true;
+  bool _reelsLoading = true;
 
   // Define dark theme colors
   final Color _primaryColor = Colors.black;
@@ -61,32 +63,64 @@ class _ProfilePageState extends State<ProfilePage>
       DatabaseReference reelsRef =
           FirebaseDatabase.instance.ref('reels/$userId');
 
-      postsRef.onValue.listen((event) {
-        if (event.snapshot.value != null) {
+      try {
+        postsRef.onValue.listen((event) {
           setState(() {
-            _posts = (event.snapshot.value as Map)
-                .entries
-                .map((e) => {
-                      'id': e.key,
-                      ...Map<String, dynamic>.from(e.value as Map),
-                    })
-                .toList();
+            if (event.snapshot.value != null) {
+              _posts = (event.snapshot.value as Map)
+                  .entries
+                  .map((e) => {
+                        'id': e.key,
+                        ...Map<String, dynamic>.from(e.value as Map),
+                      })
+                  .toList();
+            } else {
+              _posts = [];
+            }
+            _postsLoading = false;
           });
-        }
-      });
+          print("Posts loaded: ${_posts.length}");
+        }, onError: (error) {
+          print("Error loading posts: $error");
+          setState(() {
+            _postsLoading = false;
+          });
+        });
 
-      reelsRef.onValue.listen((event) {
-        if (event.snapshot.value != null) {
+        reelsRef.onValue.listen((event) {
           setState(() {
-            _reels = (event.snapshot.value as Map)
-                .entries
-                .map((e) => {
-                      'id': e.key,
-                      ...Map<String, dynamic>.from(e.value as Map),
-                    })
-                .toList();
+            if (event.snapshot.value != null) {
+              _reels = (event.snapshot.value as Map)
+                  .entries
+                  .map((e) => {
+                        'id': e.key,
+                        ...Map<String, dynamic>.from(e.value as Map),
+                      })
+                  .toList();
+            } else {
+              _reels = [];
+            }
+            _reelsLoading = false;
           });
-        }
+          print("Reels loaded: ${_reels.length}");
+        }, onError: (error) {
+          print("Error loading reels: $error");
+          setState(() {
+            _reelsLoading = false;
+          });
+        });
+      } catch (e) {
+        print("Exception in _loadUserContent: $e");
+        setState(() {
+          _postsLoading = false;
+          _reelsLoading = false;
+        });
+      }
+    } else {
+      print("User ID is null");
+      setState(() {
+        _postsLoading = false;
+        _reelsLoading = false;
       });
     }
   }
@@ -302,6 +336,12 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   Widget _buildPostsGrid() {
+    if (_postsLoading) {
+      return Center(child: CircularProgressIndicator());
+    }
+    if (_posts.isEmpty) {
+      return Center(child: Text('No posts yet'));
+    }
     return GridView.builder(
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
@@ -334,6 +374,12 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   Widget _buildReelsGrid() {
+    if (_reelsLoading) {
+      return Center(child: CircularProgressIndicator());
+    }
+    if (_reels.isEmpty) {
+      return Center(child: Text('No reels yet'));
+    }
     return GridView.builder(
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
