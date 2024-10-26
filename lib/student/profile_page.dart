@@ -4,8 +4,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:incampus/student/edit_profile_page.dart';
 import 'package:incampus/student/post_detail_screen.dart';
 import 'package:incampus/student/reel_detail_screen.dart';
-import 'package:video_player/video_player.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:reels_viewer/reels_viewer.dart';
 
 class ProfilePage extends StatefulWidget {
   @override
@@ -287,25 +286,8 @@ class _ProfilePageState extends State<ProfilePage>
       itemCount: _reels.length,
       itemBuilder: (context, index) {
         return GestureDetector(
-          onTap: () async {
-            try {
-              final ref = FirebaseStorage.instance
-                  .ref()
-                  .child(_reels[index]['videoUrl']);
-              final url = await ref.getDownloadURL();
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ReelDetailScreen(videoUrl: url),
-                ),
-              );
-            } catch (e) {
-              print("Error getting download URL: $e");
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                    content: Text("Error loading video. Please try again.")),
-              );
-            }
+          onTap: () {
+            _openReelsViewer(index);
           },
           child: Stack(
             fit: StackFit.expand,
@@ -313,6 +295,12 @@ class _ProfilePageState extends State<ProfilePage>
               Image.network(
                 _reels[index]['thumbnailUrl'] ?? '',
                 fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    color: Colors.grey,
+                    child: Icon(Icons.error, color: Colors.white),
+                  );
+                },
               ),
               Center(
                 child: Icon(Icons.play_circle_outline,
@@ -322,6 +310,35 @@ class _ProfilePageState extends State<ProfilePage>
           ),
         );
       },
+    );
+  }
+
+  void _openReelsViewer(int startIndex) {
+    List<ReelModel> reelsList = _reels.map((reel) {
+      return ReelModel(
+        reel['videoUrl'] ?? '',
+        _userProfile['username'] ?? 'User',
+        musicName: reel['musicName'] ?? 'Unknown',
+        reelDescription: reel['description'] ?? '',
+        profileUrl:
+            _userProfile['profilePicture'] ?? 'https://via.placeholder.com/150',
+        likeCount: reel['likes'] ?? 0,
+      );
+    }).toList();
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ReelDetailScreen(
+          reelId: _reels[startIndex]['id'],
+          videoUrl: _reels[startIndex]['videoUrl'] ?? '',
+          userName: _userProfile['username'] ?? 'User',
+          musicName: _reels[startIndex]['musicName'] ?? 'Unknown',
+          reelDescription: _reels[startIndex]['description'] ?? '',
+          profileUrl: _userProfile['profilePicture'] ??
+              'https://via.placeholder.com/150',
+        ),
+      ),
     );
   }
 
