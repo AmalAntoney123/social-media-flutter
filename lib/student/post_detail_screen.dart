@@ -177,7 +177,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                       width: double.infinity,
                     )
                   : AspectRatio(
-                      aspectRatio: 4 / 3,
+                      aspectRatio: 3 / 4,
                       child: Image.network(
                         widget.post['imageUrl'],
                         fit: BoxFit.cover,
@@ -218,7 +218,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                           TextSpan(
                               text: _postOwnerDetails['name'] ?? 'User',
                               style: TextStyle(fontWeight: FontWeight.bold)),
-                          TextSpan(text: ' ${widget.post['description'] ?? ''}'),
+                          TextSpan(
+                              text: ' ${widget.post['description'] ?? ''}'),
                         ],
                       ),
                     ),

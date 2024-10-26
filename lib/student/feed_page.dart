@@ -163,6 +163,7 @@ class _PostCardState extends State<PostCard> {
   int _likeCount = 0;
   int _commentCount = 0;
   bool _isLiked = false;
+  bool _isOriginalAspectRatio = false;
 
   @override
   void initState() {
@@ -313,15 +314,33 @@ class _PostCardState extends State<PostCard> {
               ),
             ),
             subtitle: Text(_getTimeAgo(widget.post['timestamp'])),
+            trailing: IconButton(
+              icon: Icon(
+                  _isOriginalAspectRatio ? Icons.crop_square : Icons.crop_3_2),
+              onPressed: () {
+                setState(() {
+                  _isOriginalAspectRatio = !_isOriginalAspectRatio;
+                });
+              },
+            ),
           ),
           GestureDetector(
             onTap: _openPostDetail,
             onDoubleTap: _toggleLike,
-            child: Image.network(
-              widget.post['imageUrl'],
-              fit: BoxFit.cover,
-              width: double.infinity,
-            ),
+            child: _isOriginalAspectRatio
+                ? Image.network(
+                    widget.post['imageUrl'],
+                    fit: BoxFit.contain,
+                    width: double.infinity,
+                  )
+                : AspectRatio(
+                    aspectRatio: 3 / 4,
+                    child: Image.network(
+                      widget.post['imageUrl'],
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                    ),
+                  ),
           ),
           Padding(
             padding: EdgeInsets.all(16),
