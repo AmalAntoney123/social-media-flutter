@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:incampus/student/chat_list_page.dart';
 import 'package:incampus/student/notifications_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -164,9 +165,12 @@ class _FeedPageState extends State<FeedPage> {
             ],
           ),
           IconButton(
-            icon: Icon(Icons.chat, color: Colors.white),
+            icon: Icon(Icons.messenger, color: Colors.white),
             onPressed: () {
-              // TODO: Implement chat page
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => ChatListPage()),
+              );
             },
           ),
         ],

@@ -9,7 +9,8 @@ class UserProfilePage extends StatefulWidget {
   final bool isFriend;
   final Function(String, bool) onFriendStatusChanged;
 
-  UserProfilePage({super.key, 
+  UserProfilePage({
+    super.key,
     required this.user,
     required this.isFriend,
     required this.onFriendStatusChanged,
@@ -248,7 +249,7 @@ class _UserProfilePageState extends State<UserProfilePage>
                         controller: _tabController,
                         tabs: [
                           Tab(icon: Icon(Icons.grid_on)),
-                          Tab(icon: Icon(Icons.play_circle_outline)),
+                          Tab(icon: Icon(Icons.video_library)),
                         ],
                       ),
                       SizedBox(

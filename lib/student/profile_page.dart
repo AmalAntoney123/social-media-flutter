@@ -296,7 +296,7 @@ class _ProfilePageState extends State<ProfilePage>
       controller: _tabController,
       tabs: [
         Tab(icon: Icon(Icons.grid_on)),
-        Tab(icon: Icon(Icons.play_circle_outline)),
+        Tab(icon: Icon(Icons.video_library)),
       ],
     );
   }

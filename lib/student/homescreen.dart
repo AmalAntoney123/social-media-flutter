@@ -93,7 +93,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
             BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Search'),
             BottomNavigationBarItem(icon: Icon(Icons.add_box), label: 'Add'),
             BottomNavigationBarItem(
-                icon: Icon(Icons.play_circle_outline), label: 'Reels'),
+                icon: Icon(Icons.video_library), label: 'Reels'),
             BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
           ],
         ),
