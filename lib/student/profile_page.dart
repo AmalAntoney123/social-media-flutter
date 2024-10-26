@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:incampus/staff/teacher_dashboard.dart';
 import 'package:incampus/student/edit_profile_page.dart';
 import 'package:incampus/student/friends_list_screen.dart';
 import 'package:incampus/student/post_detail_screen.dart';
 import 'package:incampus/student/reel_detail_screen.dart';
+import 'package:incampus/admin/admin_dashboard.dart';
 
 class ProfilePage extends StatefulWidget {
   @override
@@ -399,12 +401,35 @@ class _ProfilePageState extends State<ProfilePage>
               ),
             ),
           ),
+          if (_userProfile['role'] == 'admin')
+            ListTile(
+              leading: Icon(Icons.admin_panel_settings, color: _onSurfaceColor),
+              title: Text('Admin Dashboard',
+                  style: TextStyle(color: _onSurfaceColor)),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => AdminDashboard()),
+                );
+              },
+            ),
+          if (_userProfile['role'] == 'Teacher')
+            ListTile(
+              leading: Icon(Icons.school, color: _onSurfaceColor),
+              title: Text('Teacher Dashboard',
+                  style: TextStyle(color: _onSurfaceColor)),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => TeacherDashboard()),
+                );
+              },
+            ),
           ListTile(
             leading: Icon(Icons.logout, color: _onSurfaceColor),
             title: Text('Logout', style: TextStyle(color: _onSurfaceColor)),
             onTap: () => _logout(context),
           ),
-          // Add more ListTile widgets here for additional menu items
         ],
       ),
     );

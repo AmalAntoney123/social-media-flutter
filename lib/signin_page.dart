@@ -9,7 +9,7 @@ import 'package:incampus/register_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:incampus/staff/teacher_dashboard.dart';
-import 'package:incampus/student/student_dashboard.dart';
+import 'package:incampus/student/homescreen.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 class SignInPage extends StatefulWidget {
@@ -103,7 +103,7 @@ class _SignInPageState extends State<SignInPage> {
 
       // Check if email/password sign-in method exists
       final signInMethods = await FirebaseAuth.instance
-          .fetchSignInMethodsForEmail(googleUser.email!);
+          .fetchSignInMethodsForEmail(googleUser.email);
 
       UserCredential userCredential;
 
@@ -115,7 +115,7 @@ class _SignInPageState extends State<SignInPage> {
             // First sign in with email/password
             userCredential =
                 await FirebaseAuth.instance.signInWithEmailAndPassword(
-              email: googleUser.email!,
+              email: googleUser.email,
               password: password,
             );
 
@@ -188,28 +188,9 @@ class _SignInPageState extends State<SignInPage> {
   }
 
   void _navigateBasedOnRole(String role) {
-    Widget dashboard;
-    switch (role) {
-      case 'admin':
-        dashboard = AdminDashboard();
-        break;
-      case 'Student':
-        dashboard = StudentDashboard();
-        break;
-      case 'Teacher':
-        dashboard = TeacherDashboard();
-        break;
-      default:
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Unknown user role. Please contact support.')),
-        );
-        FirebaseAuth.instance.signOut();
-        return;
-    }
-
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (context) => dashboard),
+      MaterialPageRoute(builder: (context) => StudentDashboard()),
     );
   }
 

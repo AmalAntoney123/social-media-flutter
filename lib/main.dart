@@ -5,7 +5,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'welcome_page.dart';
 import 'admin/admin_dashboard.dart';
 import 'staff/teacher_dashboard.dart';
-import 'student/student_dashboard.dart';
+import 'student/homescreen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -63,11 +63,9 @@ class AuthWrapper extends StatelessWidget {
 
                     switch (role) {
                       case 'admin':
-                        return AdminDashboard();
                       case 'Student':
-                        return StudentDashboard();
                       case 'Teacher':
-                        return TeacherDashboard();
+                        return StudentDashboard(); // This will be renamed to HomeScreen later
                       default:
                         // Unknown role, sign out and return to welcome page
                         _auth.signOut();

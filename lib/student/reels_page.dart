@@ -244,6 +244,7 @@ class _ReelItemState extends State<ReelItem> {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: _togglePlay,
+      onDoubleTap: _handleLike,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -264,11 +265,8 @@ class _ReelItemState extends State<ReelItem> {
       fit: StackFit.expand,
       children: [
         // Video controls (optional)
-        GestureDetector(
-          onTap: _togglePlay,
-          child: Container(
-            color: Colors.transparent,
-          ),
+        Container(
+          color: Colors.transparent,
         ),
 
         // Bottom overlay

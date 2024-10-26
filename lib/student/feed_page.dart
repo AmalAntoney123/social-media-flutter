@@ -6,6 +6,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:incampus/student/post_detail_screen.dart';
 import 'package:incampus/student/user_profile_page.dart';
 import 'package:incampus/student/profile_page.dart';
+import 'package:incampus/student/story_section.dart';
 
 class FeedPage extends StatefulWidget {
   @override
@@ -17,12 +18,14 @@ class _FeedPageState extends State<FeedPage> {
   final String _currentUserId = FirebaseAuth.instance.currentUser!.uid;
   List<Map<String, dynamic>> _posts = [];
   bool _hasPendingRequests = false;
+  List<Map<String, dynamic>> _stories = [];
 
   @override
   void initState() {
     super.initState();
     _loadFriendsPosts();
     _checkPendingRequests();
+    _loadStories();
   }
 
   Future<void> _loadFriendsPosts() async {
@@ -76,7 +79,10 @@ class _FeedPageState extends State<FeedPage> {
   }
 
   Future<void> _refreshFeed() async {
-    await _loadFriendsPosts();
+    await Future.wait([
+      _loadFriendsPosts(),
+      _loadStories(),
+    ]);
   }
 
   Future<void> _checkPendingRequests() async {
@@ -85,6 +91,37 @@ class _FeedPageState extends State<FeedPage> {
     if (event.snapshot.value != null) {
       setState(() {
         _hasPendingRequests = (event.snapshot.value as Map).isNotEmpty;
+      });
+    }
+  }
+
+  Future<void> _loadStories() async {
+    DatabaseEvent storiesEvent = await _database.child('stories').once();
+    if (storiesEvent.snapshot.value != null) {
+      Map<dynamic, dynamic> allStories =
+          storiesEvent.snapshot.value as Map<dynamic, dynamic>;
+      List<Map<String, dynamic>> newStories = [];
+
+      allStories.forEach((userId, userStories) {
+        if (userStories is Map<dynamic, dynamic>) {
+          userStories.forEach((storyId, storyData) {
+            if (storyData is Map<dynamic, dynamic>) {
+              newStories.add({
+                'id': storyId,
+                'userId': userId,
+                ...Map<String, dynamic>.from(storyData),
+              });
+            }
+          });
+        }
+      });
+
+      // Sort stories by timestamp (most recent first)
+      newStories
+          .sort((a, b) => (b['timestamp'] ?? 0).compareTo(a['timestamp'] ?? 0));
+
+      setState(() {
+        _stories = newStories;
       });
     }
   }
@@ -136,14 +173,30 @@ class _FeedPageState extends State<FeedPage> {
       ),
       body: RefreshIndicator(
         onRefresh: _refreshFeed,
-        child: ListView.builder(
-          itemCount: _posts.length,
-          itemBuilder: (context, index) {
-            return PostCard(post: _posts[index], currentUserId: _currentUserId);
-          },
+        child: ListView(
+          children: [
+            StorySection(
+              stories: _stories,
+              currentUserId: _currentUserId,
+              onStoryAdded: _handleStoryAdded,
+            ),
+            ListView.builder(
+              shrinkWrap: true,
+              physics: NeverScrollableScrollPhysics(),
+              itemCount: _posts.length,
+              itemBuilder: (context, index) {
+                return PostCard(
+                    post: _posts[index], currentUserId: _currentUserId);
+              },
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  void _handleStoryAdded() {
+    _loadStories();
   }
 }
 
