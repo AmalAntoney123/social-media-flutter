@@ -1,5 +1,6 @@
 // ignore_for_file: prefer_const_constructors, prefer_const_literals_to_create_immutables
 
+import 'package:camerawesome/pigeon.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:incampus/student/feed_page.dart';
@@ -11,6 +12,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:video_compress/video_compress.dart';
+import 'package:camerawesome/camerawesome_plugin.dart';
+import 'package:path_provider/path_provider.dart';
 
 class StudentDashboard extends StatefulWidget {
   @override
@@ -114,28 +117,48 @@ class _StudentDashboardState extends State<StudentDashboard> {
   }
 
   void _showNewContentDialog() {
-    showDialog(
+    showModalBottomSheet(
       context: context,
+      backgroundColor: _surfaceColor,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Create New Content'),
-          content: Column(
+        return SafeArea(
+          child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: [
+            children: <Widget>[
               ListTile(
-                leading: Icon(Icons.image),
-                title: Text('New Post'),
+                leading: Icon(Icons.camera_alt, color: _onSurfaceColor),
+                title: Text('Take Photo',
+                    style: TextStyle(color: _onSurfaceColor)),
                 onTap: () {
                   Navigator.pop(context);
-                  _createNewPost();
+                  _openCameraAwesome(false, false);
                 },
               ),
               ListTile(
-                leading: Icon(Icons.videocam),
-                title: Text('New Reel'),
+                leading: Icon(Icons.videocam, color: _onSurfaceColor),
+                title: Text('Record Reels',
+                    style: TextStyle(color: _onSurfaceColor)),
                 onTap: () {
                   Navigator.pop(context);
-                  _createNewReel();
+                  _openCameraAwesome(true, true);
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.photo, color: _onSurfaceColor),
+                title: Text('Add New Post from Gallery',
+                    style: TextStyle(color: _onSurfaceColor)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickMedia(false, ImageSource.gallery);
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.video_library, color: _onSurfaceColor),
+                title: Text('Add New Reel from Gallery',
+                    style: TextStyle(color: _onSurfaceColor)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickMedia(true, ImageSource.gallery);
                 },
               ),
             ],
@@ -145,93 +168,173 @@ class _StudentDashboardState extends State<StudentDashboard> {
     );
   }
 
-  Future<void> _createNewPost() async {
+  void _openCameraAwesome(bool isVideo, bool isReel) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => CameraAwesomePage(
+          isVideo: isVideo,
+          onCapture: (String? path) {
+            if (path != null) {
+              Navigator.of(context).pop();
+              _showConfirmationDialog(File(path), isVideo, isReel);
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickMedia(bool isReel, ImageSource source) async {
     final ImagePicker _picker = ImagePicker();
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
-
-    if (image != null) {
-      File file = File(image.path);
-      String fileName = 'posts/${DateTime.now().millisecondsSinceEpoch}.jpg';
-
-      // Prompt user for description
-      String? description = await _getDescription(context, 'New Post');
-
-      try {
-        // Upload image to Firebase Storage
-        TaskSnapshot snapshot =
-            await FirebaseStorage.instance.ref(fileName).putFile(file);
-        String downloadUrl = await snapshot.ref.getDownloadURL();
-
-        // Save post metadata to Firebase Realtime Database
-        String? userId = FirebaseAuth.instance.currentUser?.uid;
-        if (userId != null) {
-          await FirebaseDatabase.instance.ref('posts/$userId').push().set({
-            'imageUrl': downloadUrl,
-            'timestamp': ServerValue.timestamp,
-            'type': 'post',
-            'description': description,
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Post created successfully')));
-        }
-      } catch (e) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Failed to create post: $e')));
+    try {
+      final XFile? pickedFile = isReel
+          ? await _picker.pickVideo(source: source)
+          : await _picker.pickImage(source: source);
+      if (pickedFile != null) {
+        File file = File(pickedFile.path);
+        bool isVideo = pickedFile.name.toLowerCase().endsWith('.mp4');
+        _showConfirmationDialog(file, isVideo, isReel);
       }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error picking media: $e')),
+      );
     }
   }
 
-  Future<void> _createNewReel() async {
-    final ImagePicker _picker = ImagePicker();
-    final XFile? video = await _picker.pickVideo(source: ImageSource.gallery);
+  void _showConfirmationDialog(File file, bool isVideo, bool isReel) {
+    String description = '';
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(isReel ? 'New Reel' : 'New Post'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              isVideo
+                  ? Text('Video selected')
+                  : Image.file(file, height: 200, fit: BoxFit.cover),
+              SizedBox(height: 16),
+              TextField(
+                decoration: InputDecoration(hintText: "Enter description"),
+                maxLines: 3,
+                onChanged: (value) {
+                  description = value;
+                },
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Cancel'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: Text('Post'),
+              onPressed: () {
+                Navigator.of(context).pop();
+                if (isReel) {
+                  _createNewReel(file, description);
+                } else {
+                  _createNewPost(file, isVideo, description);
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
 
-    if (video != null) {
-      File videoFile = File(video.path);
-      String videoFileName =
-          'reels/${DateTime.now().millisecondsSinceEpoch}.mp4';
+  Future<void> _createNewPost(
+      File file, bool isVideo, String description) async {
+    String fileName =
+        'posts/${DateTime.now().millisecondsSinceEpoch}.${isVideo ? 'mp4' : 'jpg'}';
 
-      // Prompt user for description
-      String? description = await _getDescription(context, 'New Reel');
+    try {
+      // Upload file to Firebase Storage
+      TaskSnapshot snapshot =
+          await FirebaseStorage.instance.ref(fileName).putFile(file);
+      String downloadUrl = await snapshot.ref.getDownloadURL();
 
-      try {
-        // Generate thumbnail using video_compress
-        final thumbnailFile =
-            await VideoCompress.getFileThumbnail(videoFile.path);
-        String thumbnailFileName =
-            'thumbnails/${DateTime.now().millisecondsSinceEpoch}.jpg';
+      // Save post metadata to Firebase Realtime Database
+      String? userId = FirebaseAuth.instance.currentUser?.uid;
+      if (userId != null) {
+        await FirebaseDatabase.instance.ref('posts/$userId').push().set({
+          'imageUrl': downloadUrl,
+          'description': description,
+          'timestamp': ServerValue.timestamp,
+          'type': 'post'
+        });
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Post created successfully')));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Failed to create post: $e')));
+    }
+  }
 
-        // Upload video to Firebase Storage
-        TaskSnapshot videoSnapshot = await FirebaseStorage.instance
-            .ref(videoFileName)
-            .putFile(videoFile);
-        String videoUrl = await videoSnapshot.ref.getDownloadURL();
+  Future<void> _createNewReel(File videoFile, String description) async {
+    String videoFileName = 'reels/${DateTime.now().millisecondsSinceEpoch}.mp4';
 
-        // Upload thumbnail to Firebase Storage
-        TaskSnapshot thumbnailSnapshot = await FirebaseStorage.instance
-            .ref(thumbnailFileName)
-            .putFile(thumbnailFile);
-        String thumbnailUrl = await thumbnailSnapshot.ref.getDownloadURL();
+    try {
+      // Generate thumbnail using video_compress
+      final thumbnailFile =
+          await VideoCompress.getFileThumbnail(videoFile.path);
+      String thumbnailFileName =
+          'thumbnails/${DateTime.now().millisecondsSinceEpoch}.jpg';
 
-        // Save reel metadata to Firebase Realtime Database
-        String? userId = FirebaseAuth.instance.currentUser?.uid;
-        if (userId != null) {
-          await FirebaseDatabase.instance.ref('reels/$userId').push().set({
-            'videoUrl': videoUrl,
-            'thumbnailUrl': thumbnailUrl,
-            'timestamp': ServerValue.timestamp,
-            'type': 'reel',
-            'description': description,
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Reel created successfully')));
+      // Upload video to Firebase Storage
+      TaskSnapshot videoSnapshot =
+          await FirebaseStorage.instance.ref(videoFileName).putFile(videoFile);
+      String videoUrl = await videoSnapshot.ref.getDownloadURL();
+
+      // Upload thumbnail to Firebase Storage
+      TaskSnapshot thumbnailSnapshot = await FirebaseStorage.instance
+          .ref(thumbnailFileName)
+          .putFile(thumbnailFile);
+      String thumbnailUrl = await thumbnailSnapshot.ref.getDownloadURL();
+
+      // Get current user data
+      User? currentUser = FirebaseAuth.instance.currentUser;
+      String? userId = currentUser?.uid;
+
+      if (userId != null) {
+        // Fetch username from the 'users' node
+        DatabaseReference userRef =
+            FirebaseDatabase.instance.ref('users/$userId');
+        DatabaseEvent event = await userRef.once();
+
+        String username = 'Anonymous';
+        if (event.snapshot.value != null) {
+          final userData = event.snapshot.value as Map<dynamic, dynamic>;
+          username = userData['name'] ?? 'Anonymous';
         }
 
-        // Clean up: delete the temporary thumbnail file
-        await thumbnailFile.delete();
-      } catch (e) {
+        await FirebaseDatabase.instance.ref('reels/$userId').push().set({
+          'videoUrl': videoUrl,
+          'thumbnailUrl': thumbnailUrl,
+          'description': description,
+          'timestamp': ServerValue.timestamp,
+          'type': 'reel',
+          'likes': 0,
+          'likedBy': {},
+          'comments': {},
+          'username': username,
+        });
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Failed to create reel: $e')));
+            .showSnackBar(SnackBar(content: Text('Reel created successfully')));
       }
+
+      // Clean up: delete the temporary thumbnail file
+      await thumbnailFile.delete();
+    } catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Failed to create reel: $e')));
     }
   }
 
@@ -260,5 +363,55 @@ class _StudentDashboardState extends State<StudentDashboard> {
         );
       },
     );
+  }
+}
+
+class CameraAwesomePage extends StatelessWidget {
+  final bool isVideo;
+  final Function(String?) onCapture;
+
+  CameraAwesomePage({required this.isVideo, required this.onCapture});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: CameraAwesomeBuilder.awesome(
+        saveConfig: SaveConfig.photoAndVideo(
+          initialCaptureMode: isVideo ? CaptureMode.video : CaptureMode.photo,
+          photoPathBuilder: (sensors) async {
+            final path = await _tempPath('.jpg');
+            return SingleCaptureRequest(path, sensors.first);
+          },
+          videoOptions: VideoOptions(
+            enableAudio: true,
+          ),
+          videoPathBuilder: (sensors) async {
+            final path = await _tempPath('.mp4');
+            return SingleCaptureRequest(path, sensors.first);
+          },
+        ),
+        sensorConfig: SensorConfig.single(
+          sensor: Sensor.position(SensorPosition.back),
+          aspectRatio: CameraAspectRatios.ratio_16_9,
+        ),
+        onMediaTap: (mediaCapture) {
+          mediaCapture.captureRequest.when(
+            single: (single) {
+              onCapture(single.file?.path);
+            },
+            multiple: (multiple) {
+              // Handle multiple captures if needed
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Future<String> _tempPath(String extension) async {
+    final Directory extDir = await getTemporaryDirectory();
+    final testDir =
+        await Directory('${extDir.path}/camerawesome').create(recursive: true);
+    return '${testDir.path}/${DateTime.now().millisecondsSinceEpoch}$extension';
   }
 }

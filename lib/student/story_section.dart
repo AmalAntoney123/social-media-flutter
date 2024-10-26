@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'package:camerawesome/pigeon.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -7,6 +9,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:video_player/video_player.dart';
 import 'package:video_compress/video_compress.dart';
 import 'package:intl/intl.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:camerawesome/camerawesome_plugin.dart';
+import 'package:path_provider/path_provider.dart';
 
 class StorySection extends StatelessWidget {
   final List<Map<String, dynamic>> stories;
@@ -92,7 +98,9 @@ class StorySection extends StatelessWidget {
     );
   }
 
-  void _showAddStoryOptions(BuildContext context) {
+  void _showAddStoryOptions(BuildContext context) async {
+    bool hasPermissions = await _checkCameraPermission();
+
     showModalBottomSheet(
       context: context,
       backgroundColor: _surfaceColor,
@@ -101,6 +109,42 @@ class StorySection extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
+              if (hasPermissions) ...[
+                ListTile(
+                  leading: Icon(Icons.camera_alt, color: _onSurfaceColor),
+                  title: Text('Take Photo',
+                      style: TextStyle(color: _onSurfaceColor)),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    if (await _checkCameraPermission()) {
+                      _captureMedia(context, ImageSource.camera,
+                          isVideo: false);
+                    } else {
+                      _showPermissionDeniedDialog(context);
+                    }
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.videocam, color: _onSurfaceColor),
+                  title: Text('Record Video',
+                      style: TextStyle(color: _onSurfaceColor)),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    if (await _checkCameraPermission()) {
+                      _captureMedia(context, ImageSource.camera, isVideo: true);
+                    } else {
+                      _showPermissionDeniedDialog(context);
+                    }
+                  },
+                ),
+              ] else ...[
+                ListTile(
+                  leading: Icon(Icons.error, color: Colors.red),
+                  title: Text('Camera permission required',
+                      style: TextStyle(color: _onSurfaceColor)),
+                  onTap: () => _showPermissionDeniedDialog(context),
+                ),
+              ],
               ListTile(
                 leading: Icon(Icons.photo, color: _onSurfaceColor),
                 title: Text('Upload Image',
@@ -123,6 +167,62 @@ class StorySection extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  Future<bool> _checkCameraPermission() async {
+    var cameraStatus = await Permission.camera.status;
+    var microphoneStatus = await Permission.microphone.status;
+
+    if (cameraStatus.isGranted && microphoneStatus.isGranted) {
+      return true;
+    } else {
+      Map<Permission, PermissionStatus> statuses = await [
+        Permission.camera,
+        Permission.microphone,
+      ].request();
+
+      print("Camera permission: ${statuses[Permission.camera]}");
+      print("Microphone permission: ${statuses[Permission.microphone]}");
+
+      return statuses[Permission.camera]!.isGranted &&
+          statuses[Permission.microphone]!.isGranted;
+    }
+  }
+
+  Future<void> _captureMedia(BuildContext context, ImageSource source,
+      {required bool isVideo}) async {
+    try {
+      // Remove the check for available cameras
+
+      if (isVideo) {
+        print("Attempting to capture video");
+        _openCameraAwesome(context, true);
+      } else {
+        print("Attempting to capture image");
+        _openCameraAwesome(context, false);
+      }
+    } catch (e) {
+      print("Error capturing media: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error capturing media: $e')),
+      );
+    }
+  }
+
+  void _openCameraAwesome(BuildContext context, bool isVideo) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => CameraAwesomePage(
+          isVideo: isVideo,
+          onCapture: (String? path) {
+            if (path != null) {
+              _uploadStory(context, XFile(path), isVideo);
+            }
+            Navigator.of(context).pop();
+          },
+        ),
+      ),
     );
   }
 
@@ -176,23 +276,35 @@ class StorySection extends StatelessWidget {
             downloadUrl; // For images, use the same URL for thumbnail
       }
 
-      final DatabaseReference dbRef =
-          FirebaseDatabase.instance.ref().child('stories/$userId').push();
-      await dbRef.set({
-        'mediaUrl': downloadUrl,
-        'thumbnailUrl': thumbnailUrl,
-        'type': isVideo ? 'video' : 'image',
-        'timestamp': ServerValue.timestamp,
-        'username': currentUser.displayName ?? 'Anonymous',
-        'userProfilePicture': currentUser.photoURL ?? '',
-      });
+      // Fetch user details from Realtime Database
+      DatabaseReference userRef =
+          FirebaseDatabase.instance.ref('users/$userId');
+      DatabaseEvent event = await userRef.once();
 
-      // Call the callback to notify that a new story has been added
-      onStoryAdded();
+      if (event.snapshot.value != null) {
+        Map<String, dynamic> userData =
+            Map<String, dynamic>.from(event.snapshot.value as Map);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Story uploaded successfully')),
-      );
+        final DatabaseReference dbRef =
+            FirebaseDatabase.instance.ref().child('stories/$userId').push();
+        await dbRef.set({
+          'mediaUrl': downloadUrl,
+          'thumbnailUrl': thumbnailUrl,
+          'type': isVideo ? 'video' : 'image',
+          'timestamp': ServerValue.timestamp,
+          'username': userData['name'] ?? 'Anonymous',
+          'userProfilePicture': userData['profilePicture'] ?? '',
+        });
+
+        // Call the callback to notify that a new story has been added
+        onStoryAdded();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Story uploaded successfully')),
+        );
+      } else {
+        throw Exception('User data not found');
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error uploading story: $e')),
@@ -204,14 +316,19 @@ class StorySection extends StatelessWidget {
     return GestureDetector(
       onTap: () => _viewStory(context, story),
       child: Container(
-        width: 60, // Reduced size
-        height: 60, // Reduced size
+        width: 60,
+        height: 60,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           border: Border.all(color: _accentColor, width: 2),
-          image: DecorationImage(
-            image: NetworkImage(story['thumbnailUrl']),
+        ),
+        child: ClipOval(
+          child: CachedNetworkImage(
+            imageUrl: story['thumbnailUrl'],
             fit: BoxFit.cover,
+            placeholder: (context, url) => CircularProgressIndicator(),
+            errorWidget: (context, url, error) =>
+                Image.asset('assets/placeholder_image.png'),
           ),
         ),
       ),
@@ -313,5 +430,77 @@ class _FullScreenStoryState extends State<FullScreenStory> {
     if (timestamp == null) return '';
     DateTime dateTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
     return DateFormat.yMMMd().add_jm().format(dateTime);
+  }
+}
+
+void _showPermissionDeniedDialog(BuildContext context) {
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: Text('Permission Required'),
+        content: Text(
+            'Camera and microphone permissions are required to capture photos and videos. Please grant these permissions in your device settings.'),
+        actions: <Widget>[
+          TextButton(
+            child: Text('OK'),
+            onPressed: () {
+              Navigator.of(context).pop();
+              openAppSettings();
+            },
+          ),
+        ],
+      );
+    },
+  );
+}
+
+class CameraAwesomePage extends StatelessWidget {
+  final bool isVideo;
+  final Function(String?) onCapture;
+
+  CameraAwesomePage({required this.isVideo, required this.onCapture});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: CameraAwesomeBuilder.awesome(
+        saveConfig: SaveConfig.photoAndVideo(
+          initialCaptureMode: isVideo ? CaptureMode.video : CaptureMode.photo,
+          photoPathBuilder: (sensors) async {
+            final path = await _tempPath('.jpg');
+            return SingleCaptureRequest(path, sensors.first);
+          },
+          videoOptions: VideoOptions(
+            enableAudio: true,
+          ),
+          videoPathBuilder: (sensors) async {
+            final path = await _tempPath('.mp4');
+            return SingleCaptureRequest(path, sensors.first);
+          },
+        ),
+        sensorConfig: SensorConfig.single(
+          sensor: Sensor.position(SensorPosition.back),
+          aspectRatio: CameraAspectRatios.ratio_16_9,
+        ),
+        onMediaTap: (mediaCapture) {
+          mediaCapture.captureRequest.when(
+            single: (single) {
+              onCapture(single.file?.path);
+            },
+            multiple: (multiple) {
+              // Handle multiple captures if needed
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Future<String> _tempPath(String extension) async {
+    final Directory extDir = await getTemporaryDirectory();
+    final testDir =
+        await Directory('${extDir.path}/camerawesome').create(recursive: true);
+    return '${testDir.path}/${DateTime.now().millisecondsSinceEpoch}$extension';
   }
 }
