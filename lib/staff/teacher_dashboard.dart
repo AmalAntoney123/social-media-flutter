@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:incampus/staff/community_management_page.dart';
 
 class TeacherDashboard extends StatefulWidget {
   @override
@@ -11,12 +12,14 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final DatabaseReference _database = FirebaseDatabase.instance.ref();
   List<Map<String, dynamic>> _pendingStudents = [];
+  List<Map<String, dynamic>> _communities = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _loadPendingStudents();
+    _loadCommunities();
   }
 
   void _loadPendingStudents() {
@@ -66,6 +69,28 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     });
   }
 
+  void _loadCommunities() {
+    final String currentUserUid = _auth.currentUser!.uid;
+    _database
+        .child('communities')
+        .orderByChild('createdBy')
+        .equalTo(currentUserUid)
+        .onValue
+        .listen((event) {
+      if (event.snapshot.value != null) {
+        final Map<dynamic, dynamic> values = event.snapshot.value as Map;
+        setState(() {
+          _communities = values.entries
+              .map((entry) => {
+                    'id': entry.key, // Make sure to include the community ID
+                    ...Map<String, dynamic>.from(entry.value as Map),
+                  })
+              .toList();
+        });
+      }
+    });
+  }
+
   void _logout(BuildContext context) async {
     try {
       await _auth.signOut();
@@ -89,36 +114,66 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 3,
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text('Teacher Dashboard'),
-          actions: [
-            IconButton(
-              icon: Icon(Icons.logout),
-              onPressed: () => _logout(context),
-              tooltip: 'Logout',
-            ),
-          ],
-          bottom: TabBar(
-            tabs: [
-              Tab(text: 'Overview'),
-              Tab(text: 'Student Approvals'),
-              Tab(text: 'Class Management'),
+  void _createCommunity() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        String communityName = '';
+        String communityDescription = '';
+        return AlertDialog(
+          title: Text('Create Community'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                decoration: InputDecoration(hintText: "Community Name"),
+                onChanged: (value) => communityName = value,
+              ),
+              TextField(
+                decoration: InputDecoration(hintText: "Community Description"),
+                onChanged: (value) => communityDescription = value,
+              ),
             ],
           ),
-        ),
-        body: TabBarView(
-          children: [
-            _buildOverviewTab(),
-            _buildStudentApprovalsTab(),
-            _buildClassManagementTab(),
+          actions: [
+            TextButton(
+              child: Text('Cancel'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            TextButton(
+              child: Text('Create'),
+              onPressed: () {
+                if (communityName.isNotEmpty) {
+                  final newCommunityRef = _database.child('communities').push();
+                  final newCommunityId = newCommunityRef.key;
+                  newCommunityRef.set({
+                    'name': communityName,
+                    'description': communityDescription,
+                    'createdBy': _auth.currentUser!.uid,
+                    'createdAt': ServerValue.timestamp,
+                    'members': {
+                      _auth.currentUser!.uid:
+                          true // Add the teacher as a member
+                    }
+                  });
+
+                  // Also add this community to the teacher's list of communities
+                  _database
+                      .child(
+                          'users/${_auth.currentUser!.uid}/communities/$newCommunityId')
+                      .set(true);
+
+                  Navigator.of(context).pop();
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Community created successfully')),
+                  );
+                }
+              },
+            ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -175,6 +230,81 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
       child: Text(
         'Class Management',
         style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  Widget _buildCommunitiesTab() {
+    return Column(
+      children: [
+        ElevatedButton(
+          onPressed: _createCommunity,
+          child: Text('Create Community'),
+        ),
+        Expanded(
+          child: ListView.builder(
+            itemCount: _communities.length,
+            itemBuilder: (context, index) {
+              final community = _communities[index];
+              return ListTile(
+                title: Text(community['name'] ?? 'Unnamed Community'),
+                subtitle: Text(community['description'] ?? 'No description'),
+                trailing: IconButton(
+                  icon: Icon(Icons.delete),
+                  onPressed: () {
+                    // Implement delete community functionality
+                  },
+                ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => CommunityManagementPage(
+                        communityId: community['id'] ?? '',
+                        communityName: community['name'] ?? 'Unnamed Community',
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 4,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text('Teacher Dashboard'),
+          actions: [
+            IconButton(
+              icon: Icon(Icons.logout),
+              onPressed: () => _logout(context),
+              tooltip: 'Logout',
+            ),
+          ],
+          bottom: TabBar(
+            tabs: [
+              Tab(text: 'Overview'),
+              Tab(text: 'Student Approvals'),
+              Tab(text: 'Class Management'),
+              Tab(text: 'Communities'),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            _buildOverviewTab(),
+            _buildStudentApprovalsTab(),
+            _buildClassManagementTab(),
+            _buildCommunitiesTab(),
+          ],
+        ),
       ),
     );
   }
