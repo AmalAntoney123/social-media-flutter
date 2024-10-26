@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:intl/intl.dart';
 
 class ChatPage extends StatefulWidget {
   final Map<String, dynamic> friend;
@@ -21,6 +22,7 @@ class _ChatPageState extends State<ChatPage> {
   void initState() {
     super.initState();
     _loadMessages();
+    _markMessagesAsRead();
   }
 
   void _loadMessages() {
@@ -30,22 +32,19 @@ class _ChatPageState extends State<ChatPage> {
         .child(widget.friend['id'])
         .onChildAdded
         .listen((event) {
-      if (event.snapshot.value != null) {
-        setState(() {
-          _messages.insert(
-              0, Map<String, dynamic>.from(event.snapshot.value as Map));
-        });
-      }
+      setState(() {
+        _messages.insert(
+            0, Map<String, dynamic>.from(event.snapshot.value as Map));
+      });
     });
+  }
 
-    // Mark messages as read for the current user
+  void _markMessagesAsRead() {
     _database
         .child('messages')
         .child(_currentUserId)
         .child(widget.friend['id'])
-        .orderByChild(_currentUserId == widget.friend['id']
-            ? 'senderRead'
-            : 'receiverRead')
+        .orderByChild('read')
         .equalTo(false)
         .once()
         .then((DatabaseEvent event) {
@@ -53,50 +52,25 @@ class _ChatPageState extends State<ChatPage> {
         Map<dynamic, dynamic> unreadMessages =
             event.snapshot.value as Map<dynamic, dynamic>;
         unreadMessages.forEach((key, value) {
-          print('Updating message: $key');
-          print(
-              'Current user is ${_currentUserId == widget.friend['id'] ? "sender" : "receiver"}');
-
           _database
               .child('messages')
               .child(_currentUserId)
               .child(widget.friend['id'])
               .child(key)
-              .update({
-            _currentUserId == widget.friend['id']
-                ? 'senderRead'
-                : 'receiverRead': true
-          });
-
-          // Update the same message in the friend's node
-          _database
-              .child('messages')
-              .child(widget.friend['id'])
-              .child(_currentUserId)
-              .child(key)
-              .update({
-            _currentUserId == widget.friend['id']
-                ? 'senderRead'
-                : 'receiverRead': true
-          });
-          print('Update complete');
+              .update({'read': true});
         });
-      } else {
-        print('No unread messages found');
       }
     });
   }
 
   void _sendMessage() {
     if (_messageController.text.isNotEmpty) {
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
       final message = {
         'senderId': _currentUserId,
-        'receiverId': widget.friend['id'],
         'text': _messageController.text,
-        'timestamp': ServerValue.timestamp,
-        'senderRead': true,
-        'receiverRead': false,
-        'sent': true,
+        'timestamp': timestamp,
+        'read': false,
       };
 
       _database
@@ -114,16 +88,6 @@ class _ChatPageState extends State<ChatPage> {
           .set(message);
 
       _messageController.clear();
-    }
-  }
-
-  Widget _buildMessageStatus(bool sent, bool senderRead, bool receiverRead) {
-    if (!sent) {
-      return Icon(Icons.access_time, size: 16, color: Colors.grey[400]);
-    } else if (senderRead && receiverRead) {
-      return Icon(Icons.done_all, size: 16, color: Colors.blue[300]);
-    } else {
-      return Icon(Icons.done, size: 16, color: Colors.grey[400]);
     }
   }
 
@@ -148,75 +112,107 @@ class _ChatPageState extends State<ChatPage> {
               itemBuilder: (context, index) {
                 final message = _messages[index];
                 final isCurrentUser = message['senderId'] == _currentUserId;
-                return Align(
-                  alignment: isCurrentUser
-                      ? Alignment.centerRight
-                      : Alignment.centerLeft,
-                  child: Container(
-                    margin: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                    padding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                    decoration: BoxDecoration(
-                      color:
-                          isCurrentUser ? Colors.blue[700] : Colors.grey[800],
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          message['text'],
-                          style: TextStyle(
-                            color: Colors.white,
-                          ),
-                        ),
-                        if (isCurrentUser)
-                          _buildMessageStatus(message['sent'],
-                              message['senderRead'], message['receiverRead']),
-                      ],
-                    ),
-                  ),
-                );
+                return _buildMessageBubble(message, isCurrentUser);
               },
             ),
           ),
-          Padding(
-            padding: EdgeInsets.all(8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _messageController,
+          _buildMessageInput(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMessageBubble(Map<String, dynamic> message, bool isCurrentUser) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 4, horizontal: 16),
+      child: Row(
+        mainAxisAlignment:
+            isCurrentUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        children: [
+          Flexible(
+            child: Container(
+              constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width * 0.7),
+              decoration: BoxDecoration(
+                color: isCurrentUser ? Colors.blue : Colors.grey[800],
+                borderRadius: BorderRadius.circular(16),
+              ),
+              padding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+              child: Column(
+                crossAxisAlignment: isCurrentUser
+                    ? CrossAxisAlignment.end
+                    : CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    message['text'],
                     style: TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: 'Type a message...',
-                      hintStyle: TextStyle(color: Colors.grey[400]),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide(color: Colors.grey[700]!),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide(color: Colors.grey[700]!),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide(color: Colors.blue),
-                      ),
-                      filled: true,
-                      fillColor: Colors.grey[800],
-                    ),
                   ),
-                ),
-                IconButton(
-                  icon: Icon(Icons.send),
-                  color: Colors.blue,
-                  onPressed: _sendMessage,
-                ),
-              ],
+                  SizedBox(height: 4),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _formatTimestamp(message['timestamp']),
+                        style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                      ),
+                      SizedBox(width: 4),
+                      if (isCurrentUser) _buildReadReceipt(message['read']),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildReadReceipt(bool isRead) {
+    return Icon(
+      isRead ? Icons.done_all : Icons.done,
+      size: 16,
+      color: isRead ? const Color.fromARGB(255, 21, 133, 30) : Colors.grey[400],
+    );
+  }
+
+  Widget _buildMessageInput() {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8),
+      color: Colors.grey[800],
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _messageController,
+              style: TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'Type a message...',
+                hintStyle: TextStyle(color: Colors.grey[400]),
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: Icon(Icons.send, color: Colors.blue),
+            onPressed: _sendMessage,
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatTimestamp(int timestamp) {
+    final date = DateTime.fromMillisecondsSinceEpoch(timestamp);
+    final now = DateTime.now();
+    final diff = now.difference(date);
+
+    if (diff.inDays == 0) {
+      return DateFormat.jm().format(date);
+    } else if (diff.inDays == 1) {
+      return 'Yesterday';
+    } else {
+      return DateFormat.MMMd().format(date);
+    }
   }
 }

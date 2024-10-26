@@ -4,11 +4,9 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:incampus/admin/admin_dashboard.dart';
 import 'package:incampus/register_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:incampus/staff/teacher_dashboard.dart';
 import 'package:incampus/student/homescreen.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 

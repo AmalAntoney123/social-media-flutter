@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'welcome_page.dart';
-import 'admin/admin_dashboard.dart';
-import 'staff/teacher_dashboard.dart';
 import 'student/homescreen.dart';
 
 void main() async {
