@@ -218,7 +218,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                           TextSpan(
                               text: _postOwnerDetails['name'] ?? 'User',
                               style: TextStyle(fontWeight: FontWeight.bold)),
-                          TextSpan(text: ' ${widget.post['caption'] ?? ''}'),
+                          TextSpan(text: ' ${widget.post['description'] ?? ''}'),
                         ],
                       ),
                     ),

@@ -6,18 +6,14 @@ import 'package:video_player/video_player.dart';
 class ReelDetailScreen extends StatefulWidget {
   final String reelId;
   final String videoUrl;
-  final String userName;
-  final String musicName;
-  final String reelDescription;
-  final String profileUrl;
+  final String uploaderId;
+  final String description;
 
   ReelDetailScreen({
     required this.reelId,
     required this.videoUrl,
-    required this.userName,
-    this.musicName = '',
-    this.reelDescription = '',
-    this.profileUrl = '',
+    required this.uploaderId,
+    required this.description,
   });
 
   @override
@@ -30,7 +26,9 @@ class _ReelDetailScreenState extends State<ReelDetailScreen> {
   bool isLiked = false;
   int likeCount = 0;
   List<Map<String, dynamic>> comments = [];
-  String userName = '';
+  String uploaderName = '';
+  String uploaderProfileUrl = '';
+  TextEditingController _commentController = TextEditingController();
 
   @override
   void initState() {
@@ -51,42 +49,42 @@ class _ReelDetailScreenState extends State<ReelDetailScreen> {
   }
 
   void _loadReelData() async {
-    String? userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId != null) {
-      DatabaseReference reelRef =
-          FirebaseDatabase.instance.ref('reels/$userId/${widget.reelId}');
-      DatabaseReference userRef =
-          FirebaseDatabase.instance.ref('users/$userId');
+    DatabaseReference reelRef = FirebaseDatabase.instance
+        .ref('reels/${widget.uploaderId}/${widget.reelId}');
+    DatabaseReference userRef =
+        FirebaseDatabase.instance.ref('users/${widget.uploaderId}');
 
-      try {
-        DatabaseEvent reelEvent = await reelRef.once();
-        DatabaseEvent userEvent = await userRef.once();
+    try {
+      DatabaseEvent reelEvent = await reelRef.once();
+      DatabaseEvent userEvent = await userRef.once();
 
-        Map<dynamic, dynamic>? reelData = reelEvent.snapshot.value as Map?;
-        Map<dynamic, dynamic>? userData = userEvent.snapshot.value as Map?;
+      Map<dynamic, dynamic>? reelData = reelEvent.snapshot.value as Map?;
+      Map<dynamic, dynamic>? userData = userEvent.snapshot.value as Map?;
 
-        if (reelData != null && userData != null) {
-          setState(() {
-            likeCount = reelData['likes'] ?? 0;
-            isLiked =
-                (reelData['likedBy'] as Map?)?.containsKey(userId) ?? false;
+      if (reelData != null && userData != null) {
+        setState(() {
+          likeCount = reelData['likes'] ?? 0;
+          isLiked = (reelData['likedBy'] as Map?)
+                  ?.containsKey(FirebaseAuth.instance.currentUser?.uid) ??
+              false;
 
-            if (reelData['comments'] != null) {
-              comments = (reelData['comments'] as Map)
-                  .entries
-                  .map((e) => {
-                        'id': e.key,
-                        ...Map<String, dynamic>.from(e.value as Map),
-                      })
-                  .toList();
-            }
+          if (reelData['comments'] != null) {
+            comments = (reelData['comments'] as Map)
+                .entries
+                .map((e) => {
+                      'id': e.key,
+                      ...Map<String, dynamic>.from(e.value as Map),
+                    })
+                .toList();
+          }
 
-            userName = userData['name'] ?? '';
-          });
-        }
-      } catch (e) {
-        print('Error loading reel data: $e');
+          uploaderName = userData['name'] ?? '';
+          uploaderProfileUrl = userData['profilePicture'] ??
+              ''; // Changed from 'profilePictureUrl' to 'profilePicture'
+        });
       }
+    } catch (e) {
+      print('Error loading reel data: $e');
     }
   }
 
@@ -148,26 +146,15 @@ class _ReelDetailScreenState extends State<ReelDetailScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              widget.userName,
+                              uploaderName,
                               style: TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold),
                             ),
-                            if (widget.reelDescription.isNotEmpty)
+                            if (widget.description.isNotEmpty)
                               Text(
-                                widget.reelDescription,
+                                widget.description,
                                 style: TextStyle(color: Colors.white),
-                              ),
-                            if (widget.musicName.isNotEmpty)
-                              Row(
-                                children: [
-                                  Icon(Icons.music_note,
-                                      color: Colors.white, size: 15),
-                                  Text(
-                                    widget.musicName,
-                                    style: TextStyle(color: Colors.white),
-                                  ),
-                                ],
                               ),
                           ],
                         ),
@@ -230,8 +217,8 @@ class _ReelDetailScreenState extends State<ReelDetailScreen> {
   void _handleLike(BuildContext context) async {
     String? userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId != null) {
-      DatabaseReference reelRef =
-          FirebaseDatabase.instance.ref('reels/$userId/${widget.reelId}');
+      DatabaseReference reelRef = FirebaseDatabase.instance
+          .ref('reels/${widget.uploaderId}/${widget.reelId}');
 
       try {
         DatabaseEvent event = await reelRef.once();
@@ -298,19 +285,18 @@ class _ReelDetailScreenState extends State<ReelDetailScreen> {
                   itemBuilder: (context, index) {
                     return ListTile(
                       title: Text(comments[index]['comment']),
-                      subtitle: Text('User: ${comments[index]['userId']}'),
+                      subtitle: Text('${comments[index]['username']} • ${_formatTimestamp(comments[index]['timestamp'])}'),
                     );
                   },
                 ),
               ),
               TextField(
+                controller: _commentController,
                 decoration: InputDecoration(
                   hintText: 'Add a comment...',
                   suffixIcon: IconButton(
                     icon: Icon(Icons.send),
-                    onPressed: () {
-                      // Implement adding a new comment
-                    },
+                    onPressed: () => _addComment(context),
                   ),
                 ),
               ),
@@ -319,5 +305,57 @@ class _ReelDetailScreenState extends State<ReelDetailScreen> {
         ),
       ),
     );
+  }
+
+  void _addComment(BuildContext context) async {
+    String? userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId != null && _commentController.text.isNotEmpty) {
+      DatabaseReference reelRef = FirebaseDatabase.instance
+          .ref('reels/${widget.uploaderId}/${widget.reelId}/comments');
+      DatabaseReference userRef = FirebaseDatabase.instance.ref('users/$userId');
+
+      try {
+        DatabaseEvent userEvent = await userRef.once();
+        Map<dynamic, dynamic>? userData = userEvent.snapshot.value as Map?;
+        String username = userData?['name'] ?? 'Anonymous';
+
+        String commentId = reelRef.push().key ?? DateTime.now().millisecondsSinceEpoch.toString();
+        await reelRef.child(commentId).set({
+          'userId': userId,
+          'username': username,
+          'comment': _commentController.text,
+          'timestamp': ServerValue.timestamp,
+        });
+
+        // Refresh comments
+        _loadReelData();
+        
+        // Clear the comment input field
+        _commentController.clear();
+        
+        // Close the keyboard
+        FocusScope.of(context).unfocus();
+      } catch (e) {
+        print('Error adding comment: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to add comment. Please try again.')),
+        );
+      }
+    }
+  }
+
+  String _formatTimestamp(dynamic timestamp) {
+    if (timestamp == null) return '';
+    DateTime dateTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
+    Duration difference = DateTime.now().difference(dateTime);
+    if (difference.inDays > 0) {
+      return '${difference.inDays}d ago';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}m ago';
+    } else {
+      return 'Just now';
+    }
   }
 }

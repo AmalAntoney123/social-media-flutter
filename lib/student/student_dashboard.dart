@@ -153,6 +153,9 @@ class _StudentDashboardState extends State<StudentDashboard> {
       File file = File(image.path);
       String fileName = 'posts/${DateTime.now().millisecondsSinceEpoch}.jpg';
 
+      // Prompt user for description
+      String? description = await _getDescription(context, 'New Post');
+
       try {
         // Upload image to Firebase Storage
         TaskSnapshot snapshot =
@@ -166,6 +169,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
             'imageUrl': downloadUrl,
             'timestamp': ServerValue.timestamp,
             'type': 'post',
+            'description': description,
           });
           ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text('Post created successfully')));
@@ -184,6 +188,9 @@ class _StudentDashboardState extends State<StudentDashboard> {
     if (video != null) {
       File videoFile = File(video.path);
       String videoFileName = 'reels/${DateTime.now().millisecondsSinceEpoch}.mp4';
+
+      // Prompt user for description
+      String? description = await _getDescription(context, 'New Reel');
 
       try {
         // Generate thumbnail using video_compress
@@ -210,6 +217,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
             'thumbnailUrl': thumbnailUrl,
             'timestamp': ServerValue.timestamp,
             'type': 'reel',
+            'description': description,
           });
           ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text('Reel created successfully')));
@@ -222,5 +230,31 @@ class _StudentDashboardState extends State<StudentDashboard> {
             .showSnackBar(SnackBar(content: Text('Failed to create reel: $e')));
       }
     }
+  }
+
+  Future<String?> _getDescription(BuildContext context, String title) async {
+    TextEditingController _descriptionController = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Add a description for your $title'),
+          content: TextField(
+            controller: _descriptionController,
+            decoration: InputDecoration(hintText: "Enter description"),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Cancel'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            TextButton(
+              child: Text('OK'),
+              onPressed: () => Navigator.of(context).pop(_descriptionController.text),
+            ),
+          ],
+        );
+      },
+    );
   }
 }

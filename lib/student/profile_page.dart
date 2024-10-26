@@ -314,29 +314,14 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   void _openReelsViewer(int startIndex) {
-    List<ReelModel> reelsList = _reels.map((reel) {
-      return ReelModel(
-        reel['videoUrl'] ?? '',
-        _userProfile['username'] ?? 'User',
-        musicName: reel['musicName'] ?? 'Unknown',
-        reelDescription: reel['description'] ?? '',
-        profileUrl:
-            _userProfile['profilePicture'] ?? 'https://via.placeholder.com/150',
-        likeCount: reel['likes'] ?? 0,
-      );
-    }).toList();
-
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => ReelDetailScreen(
           reelId: _reels[startIndex]['id'],
           videoUrl: _reels[startIndex]['videoUrl'] ?? '',
-          userName: _userProfile['username'] ?? 'User',
-          musicName: _reels[startIndex]['musicName'] ?? 'Unknown',
-          reelDescription: _reels[startIndex]['description'] ?? '',
-          profileUrl: _userProfile['profilePicture'] ??
-              'https://via.placeholder.com/150',
+          uploaderId: FirebaseAuth.instance.currentUser?.uid ?? '',
+          description: _reels[startIndex]['description'] ?? '',
         ),
       ),
     );
