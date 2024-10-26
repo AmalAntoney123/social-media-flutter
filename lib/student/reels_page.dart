@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:video_player/video_player.dart';
-import 'package:incampus/student/reel_detail_screen.dart';
 import 'package:incampus/student/user_profile_page.dart';
 import 'package:incampus/student/profile_page.dart';
 

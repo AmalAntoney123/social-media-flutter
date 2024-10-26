@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:incampus/student/post_detail_screen.dart';
 import 'package:incampus/student/reel_detail_screen.dart';
 
@@ -10,7 +9,7 @@ class UserProfilePage extends StatefulWidget {
   final bool isFriend;
   final Function(String, bool) onFriendStatusChanged;
 
-  UserProfilePage({
+  UserProfilePage({super.key, 
     required this.user,
     required this.isFriend,
     required this.onFriendStatusChanged,
