@@ -68,7 +68,12 @@ class _ForYouPageState extends State<ForYouPage> {
       context,
       MaterialPageRoute(
         builder: (context) => UserProfilePage(
-          user: user,
+          user: {
+            'uid': user['id'],
+            'name': user['name'],
+            'isPublic': user['isPublic'] ?? false,
+            ...user,
+          },
           isFriend: areFriends,
           onFriendStatusChanged: _handleFriendStatusChanged,
         ),
@@ -78,11 +83,12 @@ class _ForYouPageState extends State<ForYouPage> {
 
   Future<bool> _checkFriendship(String userId) async {
     DatabaseEvent event = await _database
-        .child('friendships')
+        .child('users')
         .child(_currentUserId)
+        .child('friends')
         .child(userId)
         .once();
-    return event.snapshot.value != null;
+    return event.snapshot.value == true;
   }
 
   void _handleFriendStatusChanged(String userId, bool isFriend) {

@@ -25,10 +25,11 @@ class _UserProfilePageState extends State<UserProfilePage>
   late TabController _tabController;
   final DatabaseReference _database = FirebaseDatabase.instance.ref();
   final String _currentUserId = FirebaseAuth.instance.currentUser!.uid;
-  late bool _isFriend;
-  late bool _requestSent;
+  bool _isFriend = false;
+  bool _requestSent = false;
   List<Map<String, dynamic>> _posts = [];
   List<Map<String, dynamic>> _reels = [];
+  bool _isLoading = true;
 
   // Define dark theme colors
   final Color _primaryColor = Colors.black;
@@ -41,48 +42,157 @@ class _UserProfilePageState extends State<UserProfilePage>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _checkFriendshipStatus();
+    _isFriend = widget.isFriend;
     _loadUserContent();
+    _checkFriendRequestStatus();
   }
 
-  void _checkFriendshipStatus() async {
-    DataSnapshot friendSnapshot = await _database.child('users/$_currentUserId/friends/${widget.user['uid']}').get();
-    DataSnapshot requestSnapshot = await _database.child('users/${widget.user['uid']}/friendRequests/$_currentUserId').get();
-    
+  void _checkFriendRequestStatus() async {
+    DatabaseEvent event = await _database
+        .child('users/${widget.user['uid']}/friendRequests/$_currentUserId')
+        .once();
     setState(() {
-      _isFriend = friendSnapshot.exists;
-      _requestSent = requestSnapshot.exists;
+      _requestSent = event.snapshot.value != null;
     });
   }
 
-  void _sendFriendRequest() async {
-    await _database.child('users/${widget.user['uid']}/friendRequests/$_currentUserId').set(true);
+  void _loadUserContent() async {
     setState(() {
-      _requestSent = true;
+      _isLoading = true;
+    });
+
+    // Load content if the user is a friend, regardless of privacy settings
+    if (_isFriend) {
+      // Load posts
+      DatabaseEvent postsEvent =
+          await _database.child('posts').child(widget.user['uid']).once();
+
+      if (postsEvent.snapshot.value != null) {
+        Map<dynamic, dynamic> postsMap =
+            postsEvent.snapshot.value as Map<dynamic, dynamic>;
+        List<Map<String, dynamic>> newPosts = postsMap.entries
+            .map((entry) => {
+                  'id': entry.key,
+                  ...Map<String, dynamic>.from(entry.value as Map)
+                })
+            .toList();
+
+        // Sort posts by timestamp (most recent first)
+        newPosts.sort(
+            (a, b) => (b['timestamp'] ?? 0).compareTo(a['timestamp'] ?? 0));
+
+        setState(() {
+          _posts = newPosts;
+        });
+      }
+
+      // Load reels
+      DatabaseEvent reelsEvent =
+          await _database.child('reels').child(widget.user['uid']).once();
+
+      if (reelsEvent.snapshot.value != null) {
+        Map<dynamic, dynamic> reelsMap =
+            reelsEvent.snapshot.value as Map<dynamic, dynamic>;
+        List<Map<String, dynamic>> newReels = reelsMap.entries
+            .map((entry) => {
+                  'id': entry.key,
+                  ...Map<String, dynamic>.from(entry.value as Map)
+                })
+            .toList();
+
+        // Sort reels by timestamp (most recent first)
+        newReels.sort(
+            (a, b) => (b['timestamp'] ?? 0).compareTo(a['timestamp'] ?? 0));
+
+        setState(() {
+          _reels = newReels;
+        });
+      }
+    } else if (widget.user['isPublic'] ?? false) {
+      // If not a friend but the profile is public, load content
+      // Load posts
+      DatabaseEvent postsEvent =
+          await _database.child('posts').child(widget.user['uid']).once();
+
+      if (postsEvent.snapshot.value != null) {
+        Map<dynamic, dynamic> postsMap =
+            postsEvent.snapshot.value as Map<dynamic, dynamic>;
+        List<Map<String, dynamic>> newPosts = postsMap.entries
+            .map((entry) => {
+                  'id': entry.key,
+                  ...Map<String, dynamic>.from(entry.value as Map)
+                })
+            .toList();
+
+        // Sort posts by timestamp (most recent first)
+        newPosts.sort(
+            (a, b) => (b['timestamp'] ?? 0).compareTo(a['timestamp'] ?? 0));
+
+        setState(() {
+          _posts = newPosts;
+        });
+      }
+
+      // Load reels
+      DatabaseEvent reelsEvent =
+          await _database.child('reels').child(widget.user['uid']).once();
+
+      if (reelsEvent.snapshot.value != null) {
+        Map<dynamic, dynamic> reelsMap =
+            reelsEvent.snapshot.value as Map<dynamic, dynamic>;
+        List<Map<String, dynamic>> newReels = reelsMap.entries
+            .map((entry) => {
+                  'id': entry.key,
+                  ...Map<String, dynamic>.from(entry.value as Map)
+                })
+            .toList();
+
+        // Sort reels by timestamp (most recent first)
+        newReels.sort(
+            (a, b) => (b['timestamp'] ?? 0).compareTo(a['timestamp'] ?? 0));
+
+        setState(() {
+          _reels = newReels;
+        });
+      }
+    } else {
+      // If not a friend and the profile is private, clear the posts and reels
+      setState(() {
+        _posts = [];
+        _reels = [];
+      });
+    }
+
+    setState(() {
+      _isLoading = false;
     });
   }
 
   void _toggleFriendship() async {
     if (_isFriend) {
       await _database
-          .child('friendships')
+          .child('users')
           .child(_currentUserId)
-          .child(widget.user['id'])
+          .child('friends')
+          .child(widget.user['uid'])
           .remove();
       await _database
-          .child('friendships')
-          .child(widget.user['id'])
+          .child('users')
+          .child(widget.user['uid'])
+          .child('friends')
           .child(_currentUserId)
           .remove();
     } else {
       await _database
-          .child('friendships')
+          .child('users')
           .child(_currentUserId)
-          .child(widget.user['id'])
+          .child('friends')
+          .child(widget.user['uid'])
           .set(true);
       await _database
-          .child('friendships')
-          .child(widget.user['id'])
+          .child('users')
+          .child(widget.user['uid'])
+          .child('friends')
           .child(_currentUserId)
           .set(true);
     }
@@ -90,48 +200,21 @@ class _UserProfilePageState extends State<UserProfilePage>
     setState(() {
       _isFriend = !_isFriend;
     });
-    widget.onFriendStatusChanged(widget.user['id'], _isFriend);
+    widget.onFriendStatusChanged(widget.user['uid'], _isFriend);
+    _loadUserContent(); // Reload content after friendship status change
   }
 
-  void _loadUserContent() async {
-    if (widget.user['isPublic'] ?? false || _isFriend) {
-      DatabaseEvent postsEvent =
-          await _database.child('posts').child(widget.user['uid']).once();
-      DatabaseEvent reelsEvent =
-          await _database.child('reels').child(widget.user['uid']).once();
-
-      if (postsEvent.snapshot.value != null) {
-        Map<dynamic, dynamic> postsMap =
-            postsEvent.snapshot.value as Map<dynamic, dynamic>;
-        setState(() {
-          _posts = postsMap.entries
-              .map((entry) => {
-                    'id': entry.key,
-                    ...Map<String, dynamic>.from(entry.value as Map)
-                  })
-              .toList();
-        });
-      }
-
-      if (reelsEvent.snapshot.value != null) {
-        Map<dynamic, dynamic> reelsMap =
-            reelsEvent.snapshot.value as Map<dynamic, dynamic>;
-        setState(() {
-          _reels = reelsMap.entries
-              .map((entry) => {
-                    'id': entry.key,
-                    ...Map<String, dynamic>.from(entry.value as Map)
-                  })
-              .toList();
-        });
-      }
-    }
+  void _sendFriendRequest() async {
+    await _database
+        .child('users/${widget.user['uid']}/friendRequests/$_currentUserId')
+        .set(true);
+    setState(() {
+      _requestSent = true;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    bool isPublic = widget.user['isPublic'] ?? false;
-
     return Theme(
       data: ThemeData.dark().copyWith(
         primaryColor: _primaryColor,
@@ -151,45 +234,47 @@ class _UserProfilePageState extends State<UserProfilePage>
           title: Text(widget.user['name'],
               style: TextStyle(color: _onSurfaceColor)),
         ),
-        body: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildProfileHeader(),
-              _buildProfileStats(),
-              _buildBio(),
-              _buildFriendshipButton(),
-              if (isPublic || _isFriend) ...[
-                TabBar(
-                  controller: _tabController,
-                  tabs: [
-                    Tab(icon: Icon(Icons.grid_on)),
-                    Tab(icon: Icon(Icons.play_circle_outline)),
+        body: _isLoading
+            ? Center(child: CircularProgressIndicator())
+            : SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildProfileHeader(),
+                    _buildProfileStats(),
+                    _buildBio(),
+                    _buildFriendshipButton(),
+                    if (_isFriend || (widget.user['isPublic'] ?? false)) ...[
+                      TabBar(
+                        controller: _tabController,
+                        tabs: [
+                          Tab(icon: Icon(Icons.grid_on)),
+                          Tab(icon: Icon(Icons.play_circle_outline)),
+                        ],
+                      ),
+                      SizedBox(
+                        height: MediaQuery.of(context).size.height *
+                            0.5, // Adjust this value as needed
+                        child: TabBarView(
+                          controller: _tabController,
+                          children: [
+                            _buildPostsGrid(),
+                            _buildReelsGrid(),
+                          ],
+                        ),
+                      ),
+                    ] else
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Text(
+                          'This profile is private. Add as a friend to see posts and reels.',
+                          style: TextStyle(color: _onSurfaceColor),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
                   ],
                 ),
-                SizedBox(
-                  height: MediaQuery.of(context).size.height *
-                      0.5, // Adjust this value as needed
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildPostsGrid(),
-                      _buildReelsGrid(),
-                    ],
-                  ),
-                ),
-              ] else
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Text(
-                    'This profile is private. Add as a friend to see posts and reels.',
-                    style: TextStyle(color: _onSurfaceColor),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-            ],
-          ),
-        ),
+              ),
       ),
     );
   }
@@ -270,31 +355,31 @@ class _UserProfilePageState extends State<UserProfilePage>
   Widget _buildFriendshipButton() {
     if (_isFriend) {
       return ElevatedButton(
-        onPressed: null,
-        child: Text('Friends'),
+        onPressed: _toggleFriendship,
+        child: Text('Unfriend'),
         style: ElevatedButton.styleFrom(
-          foregroundColor: _onSurfaceColor,
-          backgroundColor: Colors.grey[800],
+          foregroundColor: Colors.white,
+          backgroundColor: Colors.red,
           minimumSize: Size(double.infinity, 36),
         ),
       );
     } else if (_requestSent) {
       return ElevatedButton(
-        onPressed: null,
-        child: Text('Friend Request Sent'),
+        onPressed: null, // Disable the button when request is pending
+        child: Text('Pending Request'),
         style: ElevatedButton.styleFrom(
-          foregroundColor: _onSurfaceColor,
-          backgroundColor: Colors.grey[800],
+          foregroundColor: Colors.white,
+          backgroundColor: Colors.grey,
           minimumSize: Size(double.infinity, 36),
         ),
       );
     } else {
       return ElevatedButton(
         onPressed: _sendFriendRequest,
-        child: Text('Send Friend Request'),
+        child: Text('Add Friend'),
         style: ElevatedButton.styleFrom(
-          foregroundColor: _onSurfaceColor,
-          backgroundColor: _accentColor,
+          foregroundColor: Colors.white,
+          backgroundColor: Colors.blue,
           minimumSize: Size(double.infinity, 36),
         ),
       );
