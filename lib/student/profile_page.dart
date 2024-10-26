@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:incampus/student/edit_profile_page.dart';
+import 'package:incampus/student/friends_list_screen.dart';
 import 'package:incampus/student/post_detail_screen.dart';
 import 'package:incampus/student/reel_detail_screen.dart';
 
@@ -147,20 +148,13 @@ class _ProfilePageState extends State<ProfilePage>
         ),
         endDrawer: _buildDrawer(),
         body: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start, // Align children to the start (left)
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildProfileHeader(),
             _buildProfileStats(),
-            _buildBio(), // Moved up in the hierarchy
+            _buildBio(),
             _buildEditProfileButton(),
-            TabBar(
-              controller: _tabController,
-              tabs: [
-                Tab(icon: Icon(Icons.grid_on)),
-                Tab(icon: Icon(Icons.play_circle_outline)),
-              ],
-            ),
+            _buildTabBar(),
             Expanded(
               child: TabBarView(
                 controller: _tabController,
@@ -209,28 +203,51 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   Widget _buildProfileStats() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
-        _buildStatColumn(_posts.length.toString(), 'Posts'),
-        _buildStatColumn(_friendsCount.toString(), 'Friends'),
-        _buildStatColumn(_reels.length.toString(), 'Reels'),
-      ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildStatItem('${_posts.length}', 'Posts', 0),
+          _buildStatItem('${_reels.length}', 'Reels', 1),
+          GestureDetector(
+            onTap: () => _showFriendsList(context),
+            child: _buildStatItem('$_friendsCount', 'Friends', null),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildStatColumn(String count, String label) {
-    return Column(
-      children: [
-        Text(
-          count,
-          style: TextStyle(
+  void _showFriendsList(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) =>
+            FriendsListScreen(userId: FirebaseAuth.instance.currentUser!.uid),
+      ),
+    );
+  }
+
+  Widget _buildStatItem(String count, String label, int? tabIndex) {
+    return GestureDetector(
+      onTap: tabIndex != null ? () => _tabController.animateTo(tabIndex) : null,
+      child: Column(
+        children: [
+          Text(
+            count,
+            style: TextStyle(
+              color: _onSurfaceColor,
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: _onSurfaceColor),
-        ),
-        Text(label, style: TextStyle(color: Colors.grey[400])),
-      ],
+            ),
+          ),
+          Text(
+            label,
+            style: TextStyle(color: _onSurfaceColor),
+          ),
+        ],
+      ),
     );
   }
 
@@ -269,6 +286,16 @@ class _ProfilePageState extends State<ProfilePage>
           minimumSize: Size(double.infinity, 36),
         ),
       ),
+    );
+  }
+
+  Widget _buildTabBar() {
+    return TabBar(
+      controller: _tabController,
+      tabs: [
+        Tab(icon: Icon(Icons.grid_on)),
+        Tab(icon: Icon(Icons.play_circle_outline)),
+      ],
     );
   }
 

@@ -11,7 +11,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:video_compress/video_compress.dart';
-import 'package:incampus/student/notifications_page.dart';
 
 class StudentDashboard extends StatefulWidget {
   @override
