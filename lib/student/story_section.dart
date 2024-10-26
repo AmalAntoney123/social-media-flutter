@@ -18,6 +18,7 @@ class StorySection extends StatelessWidget {
   final List<Map<String, dynamic>> stories;
   final String currentUserId;
   final VoidCallback onStoryAdded;
+  final Set<String> friendIds;
 
   // Define dark theme colors
   final Color _primaryColor = Colors.black;
@@ -30,15 +31,20 @@ class StorySection extends StatelessWidget {
     required this.stories,
     required this.currentUserId,
     required this.onStoryAdded,
+    required this.friendIds,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Filter stories to only include friends' stories
+    final friendStories =
+        stories.where((story) => friendIds.contains(story['userId'])).toList();
+
     return Container(
       height: 90, // Reduced height
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        itemCount: stories.length + 1,
+        itemCount: friendStories.length + 1,
         itemBuilder: (context, index) {
           if (index == 0) {
             return _buildStoryItem(
@@ -47,7 +53,7 @@ class StorySection extends StatelessWidget {
               label: 'Your Story',
             );
           } else {
-            final story = stories[index - 1];
+            final story = friendStories[index - 1];
             return _buildStoryItem(
               context,
               child: _buildStoryAvatar(context, story),

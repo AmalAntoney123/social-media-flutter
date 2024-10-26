@@ -20,13 +20,29 @@ class _FeedPageState extends State<FeedPage> {
   List<Map<String, dynamic>> _posts = [];
   bool _hasPendingRequests = false;
   List<Map<String, dynamic>> _stories = [];
+  Set<String> _friendIds = {};
 
   @override
   void initState() {
     super.initState();
-    _loadFriendsPosts();
+    _loadFriends().then((_) {
+      _loadFriendsPosts();
+      _loadStories();
+    });
     _checkPendingRequests();
-    _loadStories();
+  }
+
+  Future<void> _loadFriends() async {
+    DatabaseEvent friendsEvent =
+        await _database.child('users/$_currentUserId/friends').once();
+    if (friendsEvent.snapshot.value != null) {
+      Map<dynamic, dynamic> friends =
+          friendsEvent.snapshot.value as Map<dynamic, dynamic>;
+      setState(() {
+        _friendIds = friends.keys.cast<String>().toSet();
+        _friendIds.add(_currentUserId); // Include current user
+      });
+    }
   }
 
   Future<void> _loadFriendsPosts() async {
@@ -104,7 +120,8 @@ class _FeedPageState extends State<FeedPage> {
       List<Map<String, dynamic>> newStories = [];
 
       allStories.forEach((userId, userStories) {
-        if (userStories is Map<dynamic, dynamic>) {
+        // Only process stories from friends and the current user
+        if (_friendIds.contains(userId) && userStories is Map<dynamic, dynamic>) {
           userStories.forEach((storyId, storyData) {
             if (storyData is Map<dynamic, dynamic>) {
               newStories.add({
@@ -118,8 +135,7 @@ class _FeedPageState extends State<FeedPage> {
       });
 
       // Sort stories by timestamp (most recent first)
-      newStories
-          .sort((a, b) => (b['timestamp'] ?? 0).compareTo(a['timestamp'] ?? 0));
+      newStories.sort((a, b) => (b['timestamp'] ?? 0).compareTo(a['timestamp'] ?? 0));
 
       setState(() {
         _stories = newStories;
@@ -183,6 +199,7 @@ class _FeedPageState extends State<FeedPage> {
               stories: _stories,
               currentUserId: _currentUserId,
               onStoryAdded: _handleStoryAdded,
+              friendIds: _friendIds,
             ),
             ListView.builder(
               shrinkWrap: true,
