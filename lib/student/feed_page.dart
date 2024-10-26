@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:incampus/student/notifications_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -238,6 +239,57 @@ class _PostCardState extends State<PostCard> {
     );
   }
 
+  void _openUserProfile() async {
+    String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
+
+    if (widget.post['userId'] == currentUserId) {
+      // If it's the current user's post, navigate to ProfilePage
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ProfilePage(),
+        ),
+      );
+    } else {
+      // Check if the current user is friends with the post creator
+      bool areFriends = await _checkFriendship(widget.post['userId']);
+
+      // If it's another user's post, navigate to UserProfilePage
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => UserProfilePage(
+            user: {
+              'uid': widget.post['userId'],
+              'name': _userData['name'],
+              'profilePicture': _userData['profilePicture'],
+              'isPublic': _userData['isPublic'] ?? false,
+              'department': _userData['department'] ?? 'No department',
+              'bio': _userData['bio'] ?? 'No bio available',
+            },
+            isFriend: areFriends,
+            onFriendStatusChanged: _handleFriendStatusChanged,
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<bool> _checkFriendship(String userId) async {
+    DatabaseEvent event = await _database
+        .child('users/${widget.currentUserId}/friends/$userId')
+        .once();
+    return event.snapshot.value == true;
+  }
+
+  void _handleFriendStatusChanged(String userId, bool isFriend) {
+    // You might want to update the local state or refresh the feed
+    // if the friendship status changes
+    setState(() {
+      // Update local state if needed
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -245,16 +297,22 @@ class _PostCardState extends State<PostCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          GestureDetector(
-            onTap: _openUserProfile,
-            child: ListTile(
-              leading: CircleAvatar(
+          ListTile(
+            leading: GestureDetector(
+              onTap: _openUserProfile,
+              child: CircleAvatar(
                 backgroundImage:
                     NetworkImage(_userData['profilePicture'] ?? ''),
               ),
-              title: Text(_userData['name'] ?? 'Loading...'),
-              subtitle: Text(_getTimeAgo(widget.post['timestamp'])),
             ),
+            title: GestureDetector(
+              onTap: _openUserProfile,
+              child: Text(
+                _userData['name'] ?? 'Loading...',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            subtitle: Text(_getTimeAgo(widget.post['timestamp'])),
           ),
           GestureDetector(
             onTap: _openPostDetail,
@@ -296,6 +354,8 @@ class _PostCardState extends State<PostCard> {
                       TextSpan(
                         text: _userData['name'] ?? 'Loading...',
                         style: TextStyle(fontWeight: FontWeight.bold),
+                        recognizer: TapGestureRecognizer()
+                          ..onTap = _openUserProfile,
                       ),
                       TextSpan(text: ' ${widget.post['description'] ?? ''}'),
                     ],
@@ -332,32 +392,6 @@ class _PostCardState extends State<PostCard> {
       return '${difference.inMinutes}m';
     } else {
       return 'Just now';
-    }
-  }
-
-  void _openUserProfile() {
-    String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
-
-    if (widget.post['userId'] == currentUserId) {
-      // If it's the current user's post, navigate to ProfilePage
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ProfilePage(),
-        ),
-      );
-    } else {
-      // If it's another user's post, navigate to UserProfilePage
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => UserProfilePage(
-            user: _userData,
-            isFriend: true, // You might want to check this dynamically
-            onFriendStatusChanged: (_, __) {}, // Implement this if needed
-          ),
-        ),
-      );
     }
   }
 }
