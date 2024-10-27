@@ -7,12 +7,13 @@ import 'package:incampus/student/reel_detail_screen.dart';
 class UserProfilePage extends StatefulWidget {
   final Map<String, dynamic> user;
   final bool isFriend;
+  final bool isClassTeacher; // Add this line
   final Function(String, bool) onFriendStatusChanged;
 
   UserProfilePage({
-    super.key,
     required this.user,
     required this.isFriend,
+    this.isClassTeacher = false, // Add this line
     required this.onFriendStatusChanged,
   });
 
@@ -30,6 +31,7 @@ class _UserProfilePageState extends State<UserProfilePage>
   List<Map<String, dynamic>> _posts = [];
   List<Map<String, dynamic>> _reels = [];
   bool _isLoading = true;
+  bool _isPublic = false;
 
   // Define dark theme colors
   final Color _primaryColor = Colors.black;
@@ -43,6 +45,7 @@ class _UserProfilePageState extends State<UserProfilePage>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _isFriend = widget.isFriend;
+    _isPublic = widget.user['isPublic'] ?? false;
     _loadUserContent();
     _checkFriendRequestStatus();
   }
@@ -61,55 +64,8 @@ class _UserProfilePageState extends State<UserProfilePage>
       _isLoading = true;
     });
 
-    // Load content if the user is a friend, regardless of privacy settings
-    if (_isFriend) {
-      // Load posts
-      DatabaseEvent postsEvent =
-          await _database.child('posts').child(widget.user['uid']).once();
-
-      if (postsEvent.snapshot.value != null) {
-        Map<dynamic, dynamic> postsMap =
-            postsEvent.snapshot.value as Map<dynamic, dynamic>;
-        List<Map<String, dynamic>> newPosts = postsMap.entries
-            .map((entry) => {
-                  'id': entry.key,
-                  ...Map<String, dynamic>.from(entry.value as Map)
-                })
-            .toList();
-
-        // Sort posts by timestamp (most recent first)
-        newPosts.sort(
-            (a, b) => (b['timestamp'] ?? 0).compareTo(a['timestamp'] ?? 0));
-
-        setState(() {
-          _posts = newPosts;
-        });
-      }
-
-      // Load reels
-      DatabaseEvent reelsEvent =
-          await _database.child('reels').child(widget.user['uid']).once();
-
-      if (reelsEvent.snapshot.value != null) {
-        Map<dynamic, dynamic> reelsMap =
-            reelsEvent.snapshot.value as Map<dynamic, dynamic>;
-        List<Map<String, dynamic>> newReels = reelsMap.entries
-            .map((entry) => {
-                  'id': entry.key,
-                  ...Map<String, dynamic>.from(entry.value as Map)
-                })
-            .toList();
-
-        // Sort reels by timestamp (most recent first)
-        newReels.sort(
-            (a, b) => (b['timestamp'] ?? 0).compareTo(a['timestamp'] ?? 0));
-
-        setState(() {
-          _reels = newReels;
-        });
-      }
-    } else if (widget.user['isPublic'] ?? false) {
-      // If not a friend but the profile is public, load content
+    // Load content if the user is a friend, the profile is public, or the viewer is the class teacher
+    if (_isFriend || _isPublic || widget.isClassTeacher) {
       // Load posts
       DatabaseEvent postsEvent =
           await _database.child('posts').child(widget.user['uid']).once();
@@ -244,7 +200,7 @@ class _UserProfilePageState extends State<UserProfilePage>
                     _buildProfileStats(),
                     _buildBio(),
                     _buildFriendshipButton(),
-                    if (_isFriend || (widget.user['isPublic'] ?? false)) ...[
+                    if (_isFriend || _isPublic || widget.isClassTeacher) ...[
                       TabBar(
                         controller: _tabController,
                         tabs: [

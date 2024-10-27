@@ -22,12 +22,12 @@ class _CommunityManagementPageState extends State<CommunityManagementPage> {
   List<Map<String, dynamic>> _joinRequests = [];
   List<Map<String, dynamic>> _members = [];
 
-  // Define dark theme colors
-  final Color _primaryColor = Colors.black;
-  final Color _accentColor = Colors.blue[700]!;
-  final Color _backgroundColor = Color(0xFF121212);
-  final Color _surfaceColor = Color(0xFF1E1E1E);
-  final Color _onSurfaceColor = Colors.white;
+  // Define light theme colors
+  final Color _primaryColor = Colors.white;
+  final Color _accentColor = Colors.blue;
+  final Color _backgroundColor = Colors.white;
+  final Color _surfaceColor = Colors.grey[100]!;
+  final Color _onSurfaceColor = Colors.black;
 
   @override
   void initState() {
@@ -60,7 +60,7 @@ class _CommunityManagementPageState extends State<CommunityManagementPage> {
             })
             .where((request) => request['status'] == 'pending')
             .toList();
-        
+
         _fetchRequestUserDetails(pendingRequests);
       }
     });
@@ -68,9 +68,13 @@ class _CommunityManagementPageState extends State<CommunityManagementPage> {
 
   void _fetchRequestUserDetails(List<Map<String, dynamic>> requests) {
     requests.forEach((request) {
-      _database.child('users/${request['userId']}').once().then((DatabaseEvent event) {
+      _database
+          .child('users/${request['userId']}')
+          .once()
+          .then((DatabaseEvent event) {
         if (event.snapshot.value != null) {
-          Map<dynamic, dynamic> userData = event.snapshot.value as Map<dynamic, dynamic>;
+          Map<dynamic, dynamic> userData =
+              event.snapshot.value as Map<dynamic, dynamic>;
           setState(() {
             _joinRequests.add({
               ...request,
@@ -116,14 +120,20 @@ class _CommunityManagementPageState extends State<CommunityManagementPage> {
 
   void _approveRequest(String userId) {
     // Update community members
-    _database.child('communities/${widget.communityId}/members/$userId').set(true);
-    
+    _database
+        .child('communities/${widget.communityId}/members/$userId')
+        .set(true);
+
     // Update join request status
-    _database.child('community_join_requests/${widget.communityId}/$userId/status').set('approved');
-    
+    _database
+        .child('community_join_requests/${widget.communityId}/$userId/status')
+        .set('approved');
+
     // Update user's communities
-    _database.child('users/$userId/communities/${widget.communityId}').set(true);
-    
+    _database
+        .child('users/$userId/communities/${widget.communityId}')
+        .set(true);
+
     // Remove the request from the local list
     setState(() {
       _joinRequests.removeWhere((request) => request['userId'] == userId);
@@ -144,15 +154,49 @@ class _CommunityManagementPageState extends State<CommunityManagementPage> {
     });
   }
 
+  void _markCommunityAsDeleted() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Delete Community'),
+          content: Text('Are you sure you want to delete this community?'),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Cancel'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: Text('Delete'),
+              onPressed: () {
+                _database
+                    .child('communities/${widget.communityId}/isDeleted')
+                    .set(true);
+                Navigator.of(context).pop();
+                Navigator.of(context).pop(); // Return to previous screen
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Community marked as deleted')),
+                );
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Theme(
-      data: ThemeData.dark().copyWith(
+      data: ThemeData.light().copyWith(
         primaryColor: _primaryColor,
         scaffoldBackgroundColor: _backgroundColor,
         appBarTheme: AppBarTheme(
           backgroundColor: _primaryColor,
           elevation: 0,
+          iconTheme: IconThemeData(color: _onSurfaceColor),
         ),
         colorScheme: ColorScheme.fromSwatch()
             .copyWith(secondary: _accentColor)
@@ -162,6 +206,13 @@ class _CommunityManagementPageState extends State<CommunityManagementPage> {
         appBar: AppBar(
           title: Text('Manage ${widget.communityName}',
               style: TextStyle(color: _onSurfaceColor)),
+          automaticallyImplyLeading: false,
+          actions: [
+            IconButton(
+              icon: Icon(Icons.delete, color: Colors.red),
+              onPressed: _markCommunityAsDeleted,
+            ),
+          ],
         ),
         body: Column(
           children: [
@@ -239,8 +290,10 @@ class _CommunityManagementPageState extends State<CommunityManagementPage> {
           itemBuilder: (context, index) {
             final request = _joinRequests[index];
             return ListTile(
-              title: Text(request['name'], style: TextStyle(color: _onSurfaceColor)),
-              subtitle: Text(request['email'], style: TextStyle(color: _onSurfaceColor.withOpacity(0.6))),
+              title: Text(request['name'],
+                  style: TextStyle(color: _onSurfaceColor)),
+              subtitle: Text(request['email'],
+                  style: TextStyle(color: _onSurfaceColor.withOpacity(0.6))),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [

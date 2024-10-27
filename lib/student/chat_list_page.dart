@@ -73,11 +73,14 @@ class _ChatListPageState extends State<ChatListPage>
         Map<dynamic, dynamic> communitiesMap =
             event.snapshot.value as Map<dynamic, dynamic>;
         setState(() {
-          _communities = communitiesMap.entries.map((entry) {
+          _communities = communitiesMap.entries
+              .where((entry) => entry.value['isDeleted'] != true)
+              .map((entry) {
             return {
               'id': entry.key,
               'name': entry.value['name'],
               'description': entry.value['description'],
+              'createdBy': entry.value['createdBy'],
             };
           }).toList();
         });

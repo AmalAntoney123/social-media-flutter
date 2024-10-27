@@ -21,6 +21,10 @@ class TeacherApprovalsPage extends StatelessWidget {
                   (entry.value as Map<dynamic, dynamic>)['status'] == 'pending')
               .toList();
 
+          if (teacherList.isEmpty) {
+            return Center(child: Text('No pending approval requests'));
+          }
+
           return ListView.builder(
             itemCount: teacherList.length,
             itemBuilder: (context, index) {

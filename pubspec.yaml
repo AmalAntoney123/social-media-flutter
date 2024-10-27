@@ -53,6 +53,7 @@ dependencies:
   intl: ^0.17.0
   cached_network_image: ^3.4.1
   camerawesome: ^2.1.0
+  fl_chart: ^0.69.0
 
 dev_dependencies:
   flutter_test:
