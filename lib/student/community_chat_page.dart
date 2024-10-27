@@ -24,6 +24,7 @@ class _CommunityChatPageState extends State<CommunityChatPage> {
   Map<String, String> _userNames = {};
   Map<String, String> _communityMembers = {};
   String _creatorId = '';
+  Map<String, dynamic>? _replyingTo;
 
   @override
   void initState() {
@@ -136,12 +137,27 @@ class _CommunityChatPageState extends State<CommunityChatPage> {
 
   void _sendMessage() {
     if (_messageController.text.isNotEmpty) {
-      _database.child('community_messages/${widget.communityId}').push().set({
+      final message = {
         'senderId': _currentUserId,
         'text': _messageController.text,
         'timestamp': ServerValue.timestamp,
-      });
+        if (_replyingTo != null)
+          'replyTo': {
+            'text': _replyingTo!['text'],
+            'senderId': _replyingTo!['senderId'],
+            'senderName': _replyingTo!['senderName'],
+            'timestamp': _replyingTo!['timestamp'],
+          },
+      };
+
+      _database
+          .child('community_messages/${widget.communityId}')
+          .push()
+          .set(message);
       _messageController.clear();
+      setState(() {
+        _replyingTo = null;
+      });
     }
   }
 
@@ -173,7 +189,8 @@ class _CommunityChatPageState extends State<CommunityChatPage> {
   void _leaveCommunity() async {
     if (_currentUserId == _creatorId) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('As the creator, you cannot leave this community.')),
+        SnackBar(
+            content: Text('As the creator, you cannot leave this community.')),
       );
       return;
     }
@@ -188,7 +205,10 @@ class _CommunityChatPageState extends State<CommunityChatPage> {
   }
 
   void _loadCreatorId() {
-    _database.child('communities/${widget.communityId}/createdBy').once().then((DatabaseEvent event) {
+    _database
+        .child('communities/${widget.communityId}/createdBy')
+        .once()
+        .then((DatabaseEvent event) {
       if (event.snapshot.value != null) {
         setState(() {
           _creatorId = event.snapshot.value as String;
@@ -252,44 +272,104 @@ class _CommunityChatPageState extends State<CommunityChatPage> {
 
   Widget _buildMessageBubble(Map<String, dynamic> message, bool isCurrentUser) {
     final senderName = _userNames[message['senderId']] ?? 'Unknown';
-    return GestureDetector(
-      onLongPress: _isTeacher ? () => _showDeleteMessageDialog(message) : null,
+
+    return Dismissible(
+      key: Key(message['timestamp'].toString()),
+      direction: isCurrentUser
+          ? DismissDirection.endToStart
+          : DismissDirection.startToEnd,
+      confirmDismiss: (direction) async {
+        setState(() {
+          _replyingTo = {
+            ...message,
+            'senderName': senderName,
+          };
+        });
+        return false;
+      },
+      background: Container(
+        padding: EdgeInsets.symmetric(horizontal: 16),
+        alignment: isCurrentUser ? Alignment.centerRight : Alignment.centerLeft,
+        color: Colors.blue.withOpacity(0.2),
+        child: Transform(
+          transform: Matrix4.identity()
+            ..scale(isCurrentUser ? -1.0 : 1.0, 1.0, 1.0),
+          alignment: Alignment.center,
+          child: Icon(
+            Icons.reply,
+            color: Colors.white,
+          ),
+        ),
+      ),
       child: Padding(
         padding: EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-        child: Column(
-          crossAxisAlignment:
-              isCurrentUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        child: Row(
+          // Changed to Row for proper alignment
+          mainAxisAlignment:
+              isCurrentUser ? MainAxisAlignment.end : MainAxisAlignment.start,
           children: [
-            Container(
-              constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width * 0.7),
-              decoration: BoxDecoration(
-                color: isCurrentUser ? Colors.blue : Colors.grey[800],
-                borderRadius: BorderRadius.circular(16),
-              ),
-              padding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    senderName,
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
+            Flexible(
+              // Added Flexible for proper width constraints
+              child: Container(
+                constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.7),
+                decoration: BoxDecoration(
+                  color: isCurrentUser ? Colors.blue : Colors.grey[800],
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                padding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      senderName,
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    message['text'],
-                    style: TextStyle(color: Colors.white),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    _formatTimestamp(message['timestamp']),
-                    style: TextStyle(color: Colors.white70, fontSize: 10),
-                  ),
-                ],
+                    if (message['replyTo'] != null) ...[
+                      Container(
+                        padding: EdgeInsets.all(8),
+                        margin: EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.black26,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              message['replyTo']['senderName'],
+                              style: TextStyle(
+                                color: Colors.blue,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              message['replyTo']['text'],
+                              style: TextStyle(
+                                  color: Colors.white70, fontSize: 12),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    Text(
+                      message['text'],
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      _formatTimestamp(message['timestamp']),
+                      style: TextStyle(color: Colors.white70, fontSize: 10),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -299,45 +379,87 @@ class _CommunityChatPageState extends State<CommunityChatPage> {
   }
 
   Widget _buildMessageInput() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (_replyingTo != null) _buildReplyPreview(),
+        Container(
+          padding: EdgeInsets.all(8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.grey[800],
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _messageController,
+                          style: TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            hintText: 'Type a message...',
+                            hintStyle: TextStyle(color: Colors.grey[400]),
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(width: 8),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.blue,
+                  shape: BoxShape.circle,
+                ),
+                child: IconButton(
+                  icon: Icon(Icons.send, color: Colors.white),
+                  onPressed: _sendMessage,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReplyPreview() {
     return Container(
       padding: EdgeInsets.all(8),
+      color: Colors.grey[850],
       child: Row(
         children: [
           Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.grey[800],
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _messageController,
-                      style: TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        hintText: 'Type a message...',
-                        hintStyle: TextStyle(color: Colors.grey[400]),
-                        border: InputBorder.none,
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      ),
-                    ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Reply to ${_replyingTo!['senderName']}',
+                  style: TextStyle(
+                    color: Colors.blue,
+                    fontWeight: FontWeight.bold,
                   ),
-                ],
-              ),
+                ),
+                Text(
+                  _replyingTo!['text'],
+                  style: TextStyle(color: Colors.grey[400]),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
           ),
-          SizedBox(width: 8),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.blue,
-              shape: BoxShape.circle,
-            ),
-            child: IconButton(
-              icon: Icon(Icons.send, color: Colors.white),
-              onPressed: _sendMessage,
-            ),
+          IconButton(
+            icon: Icon(Icons.close, color: Colors.grey[400]),
+            onPressed: () => setState(() => _replyingTo = null),
           ),
         ],
       ),
