@@ -1,6 +1,5 @@
 # 📚 InCampus: Your College Social Hub 🎓
 
-![InCampus Logo](https://via.placeholder.com/150?text=InCampus)
 
 InCampus is a vibrant social media platform tailored exclusively for college students, fostering connections, sharing experiences, and enhancing campus life.
 
@@ -75,10 +74,7 @@ This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md
 
 ## 📞 Contact
 
-For any queries or support, please reach out to our team at support@incampus.edu
+For any queries or support, please reach out to our team at amalantoney123@gmail.com
 
 ---
 
-🏫 InCampus - Connecting Campus, One Post at a Time! 🚀
-
-This README provides an overview of the InCampus app, highlighting its key features and providing instructions for getting started. The use of emojis and a clean layout makes it visually appealing and easy to read. You can further customize it by adding actual screenshots of your app or more detailed information about specific features as needed.
