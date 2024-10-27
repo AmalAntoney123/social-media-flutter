@@ -1,5 +1,3 @@
-Certainly! Here's a README for your InCampus social media app, designed specifically for college students. I've included icons and formatted it to look appealing:
-
 # 📚 InCampus: Your College Social Hub 🎓
 
 ![InCampus Logo](https://via.placeholder.com/150?text=InCampus)
