@@ -7,6 +7,7 @@ import 'package:incampus/student/friends_list_screen.dart';
 import 'package:incampus/student/post_detail_screen.dart';
 import 'package:incampus/student/reel_detail_screen.dart';
 import 'package:incampus/admin/admin_dashboard.dart';
+import 'package:incampus/student/verification_screen.dart'; // Add this import
 
 class ProfilePage extends StatefulWidget {
   @override
@@ -221,12 +222,21 @@ class _ProfilePageState extends State<ProfilePage>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  _userProfile['name'] ?? 'User Name',
-                  style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: _onSurfaceColor),
+                Row(
+                  children: [
+                    Text(
+                      _userProfile['name'] ?? 'User Name',
+                      style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: _onSurfaceColor),
+                    ),
+                    if (_userProfile['isVerified'] == true)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4.0),
+                        child: Icon(Icons.verified, color: Colors.blue, size: 20),
+                      ),
+                  ],
                 ),
                 Text(_userProfile['email'] ?? 'email@example.com',
                     style: TextStyle(color: Colors.grey[400])),
@@ -471,6 +481,16 @@ class _ProfilePageState extends State<ProfilePage>
                 );
               },
             ),
+          ListTile(
+            leading: Icon(Icons.verified, color: _onSurfaceColor),
+            title: Text('Get Verified', style: TextStyle(color: _onSurfaceColor)),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => VerificationScreen()),
+              );
+            },
+          ),
           ListTile(
             leading: Icon(Icons.logout, color: _onSurfaceColor),
             title: Text('Logout', style: TextStyle(color: _onSurfaceColor)),

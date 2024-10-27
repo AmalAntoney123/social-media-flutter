@@ -74,6 +74,7 @@ class _ReelsPageState extends State<ReelsPage> {
                 'isPublic': userData['isPublic'] ?? false,
                 'userDepartment': userData['department'] ?? 'No department',
                 'userBio': userData['bio'] ?? 'No bio available',
+                'userIsVerified': userData['isVerified'] ?? false,
                 ...Map<String, dynamic>.from(reelData as Map),
               });
             });
@@ -233,6 +234,7 @@ class _ReelItemState extends State<ReelItem> {
               'isPublic': widget.reel['isPublic'] ?? false,
               'department': widget.reel['userDepartment'] ?? 'No department',
               'bio': widget.reel['userBio'] ?? 'No bio available',
+              'isVerified': widget.reel['userIsVerified'] ?? false,
             },
             isFriend: areFriends,
             onFriendStatusChanged: _handleFriendStatusChanged,
@@ -269,9 +271,13 @@ class _ReelItemState extends State<ReelItem> {
         fit: StackFit.expand,
         children: [
           _controller.value.isInitialized
-              ? AspectRatio(
-                  aspectRatio: _controller.value.aspectRatio,
-                  child: VideoPlayer(_controller),
+              ? FittedBox(
+                  fit: BoxFit.cover,
+                  child: SizedBox(
+                    width: _controller.value.size.width,
+                    height: _controller.value.size.height,
+                    child: VideoPlayer(_controller),
+                  ),
                 )
               : Center(child: CircularProgressIndicator()),
           _buildOverlay(),
@@ -323,6 +329,12 @@ class _ReelItemState extends State<ReelItem> {
                         style: TextStyle(
                             color: Colors.white, fontWeight: FontWeight.bold),
                       ),
+                      if (widget.reel['userIsVerified'] == true)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4.0),
+                          child: Icon(Icons.verified,
+                              color: Colors.blue, size: 16),
+                        ),
                     ],
                   ),
                 ),

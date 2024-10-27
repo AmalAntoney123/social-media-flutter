@@ -382,9 +382,18 @@ class _PostCardState extends State<PostCard> {
             ),
             title: GestureDetector(
               onTap: _openUserProfile,
-              child: Text(
-                _userData['name'] ?? 'Loading...',
-                style: TextStyle(fontWeight: FontWeight.bold),
+              child: Row(
+                children: [
+                  Text(
+                    _userData['name'] ?? 'Loading...',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  if (_userData['isVerified'] == true)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4.0),
+                      child: Icon(Icons.verified, color: Colors.blue, size: 16),
+                    ),
+                ],
               ),
             ),
             subtitle: Text(_getTimeAgo(widget.post['timestamp'])),

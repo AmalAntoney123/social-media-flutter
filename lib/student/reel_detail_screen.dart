@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:video_player/video_player.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 class ReelDetailScreen extends StatefulWidget {
   final String reelId;
   final String videoUrl;
   final String uploaderId;
-  final String description;
+  String description;
 
   ReelDetailScreen({
     required this.reelId,
@@ -29,10 +30,13 @@ class _ReelDetailScreenState extends State<ReelDetailScreen> {
   String uploaderName = '';
   String uploaderProfileUrl = '';
   TextEditingController _commentController = TextEditingController();
+  late String currentUserId;
+  bool canEditDelete = false;
 
   @override
   void initState() {
     super.initState();
+    currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
     _controller = VideoPlayerController.network(widget.videoUrl)
       ..initialize().then((_) {
         setState(() {});
@@ -40,6 +44,7 @@ class _ReelDetailScreenState extends State<ReelDetailScreen> {
         _controller.setLooping(true);
       });
     _loadReelData();
+    _checkEditDeletePermission();
   }
 
   @override
@@ -88,6 +93,36 @@ class _ReelDetailScreenState extends State<ReelDetailScreen> {
     }
   }
 
+  void _checkEditDeletePermission() async {
+    if (currentUserId == widget.uploaderId) {
+      setState(() {
+        canEditDelete = true;
+      });
+    } else {
+      DatabaseReference userRef =
+          FirebaseDatabase.instance.ref('users/$currentUserId');
+      DatabaseEvent event = await userRef.once();
+      Map<dynamic, dynamic>? userData = event.snapshot.value as Map?;
+
+      if (userData != null &&
+          userData['role'] == 'Teacher' &&
+          userData['isClassTeacher'] == true) {
+        DatabaseReference uploaderRef =
+            FirebaseDatabase.instance.ref('users/${widget.uploaderId}');
+        DatabaseEvent uploaderEvent = await uploaderRef.once();
+        Map<dynamic, dynamic>? uploaderData =
+            uploaderEvent.snapshot.value as Map?;
+
+        if (uploaderData != null &&
+            uploaderData['classTeacher'] == currentUserId) {
+          setState(() {
+            canEditDelete = true;
+          });
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -106,9 +141,13 @@ class _ReelDetailScreenState extends State<ReelDetailScreen> {
               height: double.infinity,
               color: Colors.black,
               child: _controller.value.isInitialized
-                  ? AspectRatio(
-                      aspectRatio: _controller.value.aspectRatio,
-                      child: VideoPlayer(_controller),
+                  ? FittedBox(
+                      fit: BoxFit.cover,
+                      child: SizedBox(
+                        width: _controller.value.size.width,
+                        height: _controller.value.size.height,
+                        child: VideoPlayer(_controller),
+                      ),
                     )
                   : Center(child: CircularProgressIndicator()),
             ),
@@ -130,7 +169,12 @@ class _ReelDetailScreenState extends State<ReelDetailScreen> {
                       'Reel',
                       style: TextStyle(color: Colors.white, fontSize: 18),
                     ),
-                    SizedBox(width: 48), // Placeholder for symmetry
+                    canEditDelete
+                        ? IconButton(
+                            icon: Icon(Icons.more_vert, color: Colors.white),
+                            onPressed: _showOptionsMenu,
+                          )
+                        : SizedBox(width: 48), // Placeholder to maintain layout
                   ],
                 ),
                 // Bottom content
@@ -285,7 +329,8 @@ class _ReelDetailScreenState extends State<ReelDetailScreen> {
                   itemBuilder: (context, index) {
                     return ListTile(
                       title: Text(comments[index]['comment']),
-                      subtitle: Text('${comments[index]['username']} • ${_formatTimestamp(comments[index]['timestamp'])}'),
+                      subtitle: Text(
+                          '${comments[index]['username']} • ${_formatTimestamp(comments[index]['timestamp'])}'),
                     );
                   },
                 ),
@@ -312,14 +357,16 @@ class _ReelDetailScreenState extends State<ReelDetailScreen> {
     if (userId != null && _commentController.text.isNotEmpty) {
       DatabaseReference reelRef = FirebaseDatabase.instance
           .ref('reels/${widget.uploaderId}/${widget.reelId}/comments');
-      DatabaseReference userRef = FirebaseDatabase.instance.ref('users/$userId');
+      DatabaseReference userRef =
+          FirebaseDatabase.instance.ref('users/$userId');
 
       try {
         DatabaseEvent userEvent = await userRef.once();
         Map<dynamic, dynamic>? userData = userEvent.snapshot.value as Map?;
         String username = userData?['name'] ?? 'Anonymous';
 
-        String commentId = reelRef.push().key ?? DateTime.now().millisecondsSinceEpoch.toString();
+        String commentId = reelRef.push().key ??
+            DateTime.now().millisecondsSinceEpoch.toString();
         await reelRef.child(commentId).set({
           'userId': userId,
           'username': username,
@@ -329,10 +376,10 @@ class _ReelDetailScreenState extends State<ReelDetailScreen> {
 
         // Refresh comments
         _loadReelData();
-        
+
         // Clear the comment input field
         _commentController.clear();
-        
+
         // Close the keyboard
         FocusScope.of(context).unfocus();
       } catch (e) {
@@ -357,5 +404,159 @@ class _ReelDetailScreenState extends State<ReelDetailScreen> {
     } else {
       return 'Just now';
     }
+  }
+
+  void _showOptionsMenu() {
+    if (!canEditDelete) return;
+
+    showModalBottomSheet(
+      context: context,
+      builder: (BuildContext context) {
+        return Container(
+          child: Wrap(
+            children: <Widget>[
+              ListTile(
+                leading: Icon(Icons.edit),
+                title: Text('Edit Description'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _editDescription();
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.delete),
+                title: Text('Delete Reel'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _deleteReel();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _editDescription() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        String newDescription = widget.description;
+        return AlertDialog(
+          title: Text('Edit Description'),
+          content: TextField(
+            onChanged: (value) {
+              newDescription = value;
+            },
+            controller: TextEditingController(text: newDescription),
+            decoration: InputDecoration(hintText: "Enter new description"),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Cancel'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: Text('Save'),
+              onPressed: () async {
+                Navigator.of(context).pop();
+                try {
+                  await FirebaseDatabase.instance
+                      .ref('reels/${widget.uploaderId}/${widget.reelId}')
+                      .update({'description': newDescription});
+                  setState(() {
+                    widget.description = newDescription;
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Description updated successfully')),
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to update description')),
+                  );
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _deleteReel() {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: Text('Delete Reel'),
+          content: Text('Are you sure you want to delete this reel?'),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Cancel'),
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+              },
+            ),
+            TextButton(
+              child: Text('Delete'),
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                try {
+                  // Reference to the reel in the database
+                  DatabaseReference reelRef = FirebaseDatabase.instance
+                      .ref('reels/${widget.uploaderId}/${widget.reelId}');
+
+                  // Get the reel data
+                  DatabaseEvent event = await reelRef.once();
+                  Map<dynamic, dynamic>? reelData =
+                      event.snapshot.value as Map?;
+
+                  if (reelData != null) {
+                    // Delete the video from storage
+                    String videoUrl = reelData['videoUrl'];
+                    await FirebaseStorage.instance
+                        .refFromURL(videoUrl)
+                        .delete();
+
+                    // Delete the thumbnail from storage if it exists
+                    if (reelData.containsKey('thumbnailUrl')) {
+                      String thumbnailUrl = reelData['thumbnailUrl'];
+                      await FirebaseStorage.instance
+                          .refFromURL(thumbnailUrl)
+                          .delete();
+                    }
+
+                    // Delete the reel from the database
+                    await reelRef.remove();
+
+                    // Use a post-frame callback to pop the screen
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) {
+                        Navigator.of(context).pop(true);
+                      }
+                    });
+                  } else {
+                    throw Exception('Reel data not found');
+                  }
+                } catch (e) {
+                  print('Error deleting reel: $e');
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content:
+                            Text('Failed to delete reel. Please try again.'),
+                      ),
+                    );
+                  }
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 }

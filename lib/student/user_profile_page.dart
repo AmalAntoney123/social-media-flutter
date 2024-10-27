@@ -3,6 +3,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:incampus/student/post_detail_screen.dart';
 import 'package:incampus/student/reel_detail_screen.dart';
+import 'package:pull_to_refresh/pull_to_refresh.dart';
 
 class UserProfilePage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -40,6 +41,9 @@ class _UserProfilePageState extends State<UserProfilePage>
   final Color _surfaceColor = Color(0xFF1E1E1E);
   final Color _onSurfaceColor = Colors.white;
 
+  // Add this new property
+  late RefreshController _refreshController;
+
   @override
   void initState() {
     super.initState();
@@ -48,6 +52,9 @@ class _UserProfilePageState extends State<UserProfilePage>
     _isPublic = widget.user['isPublic'] ?? false;
     _loadUserContent();
     _checkFriendRequestStatus();
+    
+    // Initialize the RefreshController
+    _refreshController = RefreshController(initialRefresh: false);
   }
 
   void _checkFriendRequestStatus() async {
@@ -169,6 +176,12 @@ class _UserProfilePageState extends State<UserProfilePage>
     });
   }
 
+  // Add this new method
+  void _onRefresh() async {
+    _loadUserContent();
+    _refreshController.refreshCompleted();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Theme(
@@ -192,43 +205,47 @@ class _UserProfilePageState extends State<UserProfilePage>
         ),
         body: _isLoading
             ? Center(child: CircularProgressIndicator())
-            : SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildProfileHeader(),
-                    _buildProfileStats(),
-                    _buildBio(),
-                    _buildFriendshipButton(),
-                    if (_isFriend || _isPublic || widget.isClassTeacher) ...[
-                      TabBar(
-                        controller: _tabController,
-                        tabs: [
-                          Tab(icon: Icon(Icons.grid_on)),
-                          Tab(icon: Icon(Icons.video_library)),
-                        ],
-                      ),
-                      SizedBox(
-                        height: MediaQuery.of(context).size.height *
-                            0.5, // Adjust this value as needed
-                        child: TabBarView(
+            : SmartRefresher(
+                controller: _refreshController,
+                onRefresh: _onRefresh,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildProfileHeader(),
+                      _buildProfileStats(),
+                      _buildBio(),
+                      _buildFriendshipButton(),
+                      if (_isFriend || _isPublic || widget.isClassTeacher) ...[
+                        TabBar(
                           controller: _tabController,
-                          children: [
-                            _buildPostsGrid(),
-                            _buildReelsGrid(),
+                          tabs: [
+                            Tab(icon: Icon(Icons.grid_on)),
+                            Tab(icon: Icon(Icons.video_library)),
                           ],
                         ),
-                      ),
-                    ] else
-                      Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Text(
-                          'This profile is private. Add as a friend to see posts and reels.',
-                          style: TextStyle(color: _onSurfaceColor),
-                          textAlign: TextAlign.center,
+                        SizedBox(
+                          height: MediaQuery.of(context).size.height *
+                              0.5, // Adjust this value as needed
+                          child: TabBarView(
+                            controller: _tabController,
+                            children: [
+                              _buildPostsGrid(),
+                              _buildReelsGrid(),
+                            ],
+                          ),
                         ),
-                      ),
-                  ],
+                      ] else
+                        Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Text(
+                            'This profile is private. Add as a friend to see posts and reels.',
+                            style: TextStyle(color: _onSurfaceColor),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
       ),
@@ -250,12 +267,22 @@ class _UserProfilePageState extends State<UserProfilePage>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  widget.user['name'],
-                  style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: _onSurfaceColor),
+                Row(
+                  children: [
+                    Text(
+                      widget.user['name'],
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: _onSurfaceColor,
+                      ),
+                    ),
+                    if (widget.user['isVerified'] == true)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4.0),
+                        child: Icon(Icons.verified, color: Colors.blue, size: 20),
+                      ),
+                  ],
                 ),
                 Text(widget.user['department'] ?? 'No department',
                     style: TextStyle(color: Colors.grey[400])),
@@ -439,6 +466,7 @@ class _UserProfilePageState extends State<UserProfilePage>
   @override
   void dispose() {
     _tabController.dispose();
+    _refreshController.dispose(); // Add this line
     super.dispose();
   }
 }

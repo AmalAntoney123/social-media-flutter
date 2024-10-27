@@ -254,6 +254,12 @@ class _StudentDashboardState extends State<StudentDashboard> {
     String fileName =
         'posts/${DateTime.now().millisecondsSinceEpoch}.${isVideo ? 'mp4' : 'jpg'}';
 
+    // Show uploading snackbar
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          content: Text('Uploading post...'), duration: Duration(seconds: 2)),
+    );
+
     try {
       // Upload file to Firebase Storage
       TaskSnapshot snapshot =
@@ -269,8 +275,9 @@ class _StudentDashboardState extends State<StudentDashboard> {
           'timestamp': ServerValue.timestamp,
           'type': 'post'
         });
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Post created successfully')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Post uploaded successfully')),
+        );
       }
     } catch (e) {
       ScaffoldMessenger.of(context)
@@ -280,6 +287,12 @@ class _StudentDashboardState extends State<StudentDashboard> {
 
   Future<void> _createNewReel(File videoFile, String description) async {
     String videoFileName = 'reels/${DateTime.now().millisecondsSinceEpoch}.mp4';
+
+    // Show uploading snackbar
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          content: Text('Uploading reel...'), duration: Duration(seconds: 2)),
+    );
 
     try {
       // Generate thumbnail using video_compress
@@ -326,8 +339,9 @@ class _StudentDashboardState extends State<StudentDashboard> {
           'comments': {},
           'username': username,
         });
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Reel created successfully')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Reel uploaded successfully')),
+        );
       }
 
       // Clean up: delete the temporary thumbnail file

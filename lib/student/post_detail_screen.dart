@@ -3,6 +3,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 class PostDetailScreen extends StatefulWidget {
   final String postId;
@@ -25,6 +26,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   Map<String, dynamic> _currentUserDetails = {};
   Map<String, dynamic> _postOwnerDetails = {};
   bool _isOriginalAspectRatio = false;
+  bool _canEditDelete = false;
 
   @override
   void initState() {
@@ -34,6 +36,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     _loadPostOwnerDetails();
     _loadComments();
     _loadLikes();
+    _checkEditDeletePermission();
   }
 
   void _loadUserDetails() {
@@ -124,6 +127,164 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     }
   }
 
+  void _checkEditDeletePermission() async {
+    if (_currentUserId == widget.userId) {
+      setState(() {
+        _canEditDelete = true;
+      });
+    } else {
+      DatabaseReference userRef =
+          FirebaseDatabase.instance.ref('users/$_currentUserId');
+      DatabaseEvent event = await userRef.once();
+      Map<dynamic, dynamic>? userData = event.snapshot.value as Map?;
+
+      if (userData != null &&
+          userData['role'] == 'Teacher' &&
+          userData['isClassTeacher'] == true) {
+        DatabaseReference postOwnerRef =
+            FirebaseDatabase.instance.ref('users/${widget.userId}');
+        DatabaseEvent postOwnerEvent = await postOwnerRef.once();
+        Map<dynamic, dynamic>? postOwnerData =
+            postOwnerEvent.snapshot.value as Map?;
+
+        if (postOwnerData != null &&
+            postOwnerData['classTeacher'] == _currentUserId) {
+          setState(() {
+            _canEditDelete = true;
+          });
+        }
+      }
+    }
+  }
+
+  void _showOptionsMenu() {
+    if (!_canEditDelete) return;
+
+    showModalBottomSheet(
+      context: context,
+      builder: (BuildContext context) {
+        return Container(
+          child: Wrap(
+            children: <Widget>[
+              ListTile(
+                leading: Icon(Icons.edit),
+                title: Text('Edit Description'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _editDescription();
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.delete),
+                title: Text('Delete Post'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _deletePost();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _editDescription() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        String newDescription = widget.post['description'] ?? '';
+        return AlertDialog(
+          title: Text('Edit Description'),
+          content: TextField(
+            onChanged: (value) {
+              newDescription = value;
+            },
+            controller: TextEditingController(text: newDescription),
+            decoration: InputDecoration(hintText: "Enter new description"),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Cancel'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: Text('Save'),
+              onPressed: () async {
+                Navigator.of(context).pop();
+                try {
+                  await FirebaseDatabase.instance
+                      .ref('posts/${widget.userId}/${widget.postId}')
+                      .update({'description': newDescription});
+                  setState(() {
+                    widget.post['description'] = newDescription;
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Description updated successfully')),
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to update description')),
+                  );
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _deletePost() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Delete Post'),
+          content: Text('Are you sure you want to delete this post?'),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Cancel'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: Text('Delete'),
+              onPressed: () async {
+                Navigator.of(context).pop(); // Close the dialog
+                try {
+                  // Delete the post from the database
+                  await FirebaseDatabase.instance
+                      .ref('posts/${widget.userId}/${widget.postId}')
+                      .remove();
+
+                  // Delete the image from storage
+                  await FirebaseStorage.instance
+                      .refFromURL(widget.post['imageUrl'])
+                      .delete();
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Post deleted successfully')),
+                  );
+
+                  // Navigate back to the previous screen (likely the profile screen)
+                  Navigator.of(context).pop();
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to delete post')),
+                  );
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Theme(
@@ -163,7 +324,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 });
               },
             ),
-            IconButton(icon: Icon(Icons.more_vert), onPressed: () {}),
+            if (_canEditDelete)
+              IconButton(
+                icon: Icon(Icons.more_vert),
+                onPressed: _showOptionsMenu,
+              ),
           ],
         ),
         body: SingleChildScrollView(
@@ -218,6 +383,13 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                           TextSpan(
                               text: _postOwnerDetails['name'] ?? 'User',
                               style: TextStyle(fontWeight: FontWeight.bold)),
+                          if (_postOwnerDetails['isVerified'] == true)
+                            WidgetSpan(
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 4.0),
+                                child: Icon(Icons.verified, color: Colors.blue, size: 16),
+                              ),
+                            ),
                           TextSpan(
                               text: ' ${widget.post['description'] ?? ''}'),
                         ],

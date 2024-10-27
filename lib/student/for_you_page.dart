@@ -170,8 +170,16 @@ class _ForYouPageState extends State<ForYouPage> {
                     backgroundImage: NetworkImage(user['profilePicture'] ??
                         'https://via.placeholder.com/150'),
                   ),
-                  title:
+                  title: Row(
+                    children: [
                       Text(user['name'], style: TextStyle(color: Colors.white)),
+                      if (user['isVerified'] == true)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4.0),
+                          child: Icon(Icons.verified, color: Colors.blue, size: 16),
+                        ),
+                    ],
+                  ),
                   subtitle: Text(user['department'] ?? 'No department',
                       style: TextStyle(color: Colors.grey)),
                   trailing: Icon(Icons.arrow_forward_ios, color: Colors.grey),

@@ -75,8 +75,17 @@ class _NotificationsPageState extends State<NotificationsPage> {
                                 userData['profilePicture'] ??
                                     'https://via.placeholder.com/150'),
                           ),
-                          title: Text(userData['name'] ?? 'Unknown User',
-                              style: TextStyle(color: _onSurfaceColor)),
+                          title: Row(
+                            children: [
+                              Text(userData['name'] ?? 'Unknown User',
+                                  style: TextStyle(color: _onSurfaceColor)),
+                              if (userData['isVerified'] == true)
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 4.0),
+                                  child: Icon(Icons.verified, color: Colors.blue, size: 16),
+                                ),
+                            ],
+                          ),
                           subtitle: Text('Sent you a friend request',
                               style: TextStyle(color: Colors.grey[400])),
                           trailing: Row(
