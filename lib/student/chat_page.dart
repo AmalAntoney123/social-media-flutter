@@ -22,24 +22,74 @@ class _ChatPageState extends State<ChatPage> {
   void initState() {
     super.initState();
     _loadMessages();
+    _startMarkingMessagesAsRead(); // Start periodic checking when chat opens
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
     _markMessagesAsRead();
   }
 
   void _loadMessages() {
+    // First, get all existing messages
+    _database
+        .child('messages')
+        .child(_currentUserId)
+        .child(widget.friend['id'])
+        .once()
+        .then((DatabaseEvent event) {
+      if (event.snapshot.value != null) {
+        setState(() {
+          final messages =
+              Map<dynamic, dynamic>.from(event.snapshot.value as Map);
+          _messages = messages.values
+              .map((msg) => Map<String, dynamic>.from(msg as Map))
+              .toList();
+          _messages.sort((a, b) => b['timestamp'].compareTo(a['timestamp']));
+        });
+      }
+    });
+
+    // Listen for new messages
     _database
         .child('messages')
         .child(_currentUserId)
         .child(widget.friend['id'])
         .onChildAdded
         .listen((event) {
+      if (!_messages.any((msg) =>
+          msg['timestamp'] == (event.snapshot.value as Map)['timestamp'] &&
+          msg['text'] == (event.snapshot.value as Map)['text'])) {
+        setState(() {
+          _messages.insert(
+              0, Map<String, dynamic>.from(event.snapshot.value as Map));
+        });
+      }
+    });
+
+    // Listen for message updates (including read status changes)
+    _database
+        .child('messages')
+        .child(_currentUserId)
+        .child(widget.friend['id'])
+        .onChildChanged
+        .listen((event) {
       setState(() {
-        _messages.insert(
-            0, Map<String, dynamic>.from(event.snapshot.value as Map));
+        final updatedMessage =
+            Map<String, dynamic>.from(event.snapshot.value as Map);
+        final index = _messages.indexWhere((msg) =>
+            msg['timestamp'] == updatedMessage['timestamp'] &&
+            msg['text'] == updatedMessage['text']);
+        if (index != -1) {
+          _messages[index] = updatedMessage;
+        }
       });
     });
   }
 
   void _markMessagesAsRead() {
+    // Only mark messages from friend as read
     _database
         .child('messages')
         .child(_currentUserId)
@@ -52,12 +102,39 @@ class _ChatPageState extends State<ChatPage> {
         Map<dynamic, dynamic> unreadMessages =
             event.snapshot.value as Map<dynamic, dynamic>;
         unreadMessages.forEach((key, value) {
-          _database
-              .child('messages')
-              .child(_currentUserId)
-              .child(widget.friend['id'])
-              .child(key)
-              .update({'read': true});
+          Map<dynamic, dynamic> message = value as Map<dynamic, dynamic>;
+          // Only mark messages from friend as read
+          if (message['senderId'] == widget.friend['id']) {
+            _database
+                .child('messages')
+                .child(_currentUserId)
+                .child(widget.friend['id'])
+                .child(key)
+                .update({'read': true});
+
+            // Update in friend's database as well
+            _database
+                .child('messages')
+                .child(widget.friend['id'])
+                .child(_currentUserId)
+                .orderByChild('timestamp')
+                .equalTo(message['timestamp'])
+                .once()
+                .then((DatabaseEvent matchEvent) {
+              if (matchEvent.snapshot.value != null) {
+                Map<dynamic, dynamic> matchMessages =
+                    matchEvent.snapshot.value as Map<dynamic, dynamic>;
+                matchMessages.forEach((matchKey, matchValue) {
+                  _database
+                      .child('messages')
+                      .child(widget.friend['id'])
+                      .child(_currentUserId)
+                      .child(matchKey)
+                      .update({'read': true});
+                });
+              }
+            });
+          }
         });
       }
     });
@@ -234,5 +311,23 @@ class _ChatPageState extends State<ChatPage> {
     } else {
       return DateFormat.MMMd().format(date);
     }
+  }
+
+  // Add this method to periodically mark messages as read while chat is open
+  void _startMarkingMessagesAsRead() {
+    // Mark messages as read every few seconds while the chat is open
+    Future.delayed(Duration(seconds: 2), () {
+      if (mounted) {
+        // Check if widget is still mounted
+        _markMessagesAsRead();
+        _startMarkingMessagesAsRead(); // Schedule next check
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    super.dispose();
   }
 }

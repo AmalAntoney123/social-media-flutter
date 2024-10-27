@@ -19,8 +19,9 @@ class _ChatListPageState extends State<ChatListPage>
   Map<String, String> _joinRequestStatuses = {};
   late TabController _tabController;
   String _searchQuery = '';
+  Map<String, int> _unreadMessages = {};
 
-  // Define dark theme colors
+  // dark theme colors
   final Color _primaryColor = Colors.black;
   final Color _accentColor = Colors.blue[700]!;
   final Color _backgroundColor = Color(0xFF121212);
@@ -35,12 +36,43 @@ class _ChatListPageState extends State<ChatListPage>
     _loadCommunities();
     _loadUserMemberships();
     _loadJoinRequestStatuses();
+    _loadUnreadMessages();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _loadUnreadMessages() {
+    _database.child('messages').child(_currentUserId).onValue.listen((event) {
+      if (event.snapshot.value != null) {
+        Map<dynamic, dynamic> allMessages =
+            event.snapshot.value as Map<dynamic, dynamic>;
+        Map<String, int> newUnreadCount = {};
+
+        allMessages.forEach((friendId, messages) {
+          if (messages is Map) {
+            int unreadCount = 0;
+            messages.forEach((messageId, messageData) {
+              if (messageData is Map &&
+                  messageData['senderId'] != _currentUserId &&
+                  messageData['read'] == false) {
+                unreadCount++;
+              }
+            });
+            if (unreadCount > 0) {
+              newUnreadCount[friendId] = unreadCount;
+            }
+          }
+        });
+
+        setState(() {
+          _unreadMessages = newUnreadCount;
+        });
+      }
+    });
   }
 
   void _loadFriends() {
@@ -248,12 +280,31 @@ class _ChatListPageState extends State<ChatListPage>
       itemCount: filteredFriends.length,
       itemBuilder: (context, index) {
         final friend = filteredFriends[index];
+        final unreadCount = _unreadMessages[friend['id']] ?? 0;
+
         return ListTile(
           leading: CircleAvatar(
             backgroundImage: NetworkImage(friend['profilePicture']),
             backgroundColor: _surfaceColor,
           ),
           title: Text(friend['name'], style: TextStyle(color: _onSurfaceColor)),
+          trailing: unreadCount > 0
+              ? Container(
+                  padding: EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    unreadCount > 99 ? '99+' : unreadCount.toString(),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                )
+              : null,
           onTap: () {
             Navigator.push(
               context,

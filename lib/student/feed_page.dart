@@ -19,6 +19,7 @@ class _FeedPageState extends State<FeedPage> {
   final String _currentUserId = FirebaseAuth.instance.currentUser!.uid;
   List<Map<String, dynamic>> _posts = [];
   bool _hasPendingRequests = false;
+  bool _hasUnreadMessages = false; // Add this line
   List<Map<String, dynamic>> _stories = [];
   Set<String> _friendIds = {};
 
@@ -30,6 +31,7 @@ class _FeedPageState extends State<FeedPage> {
       _loadStories();
     });
     _checkPendingRequests();
+    _checkUnreadMessages(); // Add this line
   }
 
   Future<void> _loadFriends() async {
@@ -121,7 +123,8 @@ class _FeedPageState extends State<FeedPage> {
 
       allStories.forEach((userId, userStories) {
         // Only process stories from friends and the current user
-        if (_friendIds.contains(userId) && userStories is Map<dynamic, dynamic>) {
+        if (_friendIds.contains(userId) &&
+            userStories is Map<dynamic, dynamic>) {
           userStories.forEach((storyId, storyData) {
             if (storyData is Map<dynamic, dynamic>) {
               newStories.add({
@@ -135,12 +138,40 @@ class _FeedPageState extends State<FeedPage> {
       });
 
       // Sort stories by timestamp (most recent first)
-      newStories.sort((a, b) => (b['timestamp'] ?? 0).compareTo(a['timestamp'] ?? 0));
+      newStories
+          .sort((a, b) => (b['timestamp'] ?? 0).compareTo(a['timestamp'] ?? 0));
 
       setState(() {
         _stories = newStories;
       });
     }
+  }
+
+  // Add this method
+  void _checkUnreadMessages() {
+    _database.child('messages').child(_currentUserId).onValue.listen((event) {
+      if (event.snapshot.value != null) {
+        Map<dynamic, dynamic> allMessages =
+            event.snapshot.value as Map<dynamic, dynamic>;
+        bool hasUnread = false;
+
+        allMessages.forEach((friendId, messages) {
+          if (messages is Map) {
+            messages.forEach((messageId, messageData) {
+              if (messageData is Map &&
+                  messageData['senderId'] != _currentUserId &&
+                  messageData['read'] == false) {
+                hasUnread = true;
+              }
+            });
+          }
+        });
+
+        setState(() {
+          _hasUnreadMessages = hasUnread;
+        });
+      }
+    });
   }
 
   @override
@@ -180,14 +211,35 @@ class _FeedPageState extends State<FeedPage> {
                 ),
             ],
           ),
-          IconButton(
-            icon: Icon(Icons.messenger, color: Colors.white),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => ChatListPage()),
-              );
-            },
+          Stack(
+            // Wrap messenger icon in Stack
+            children: [
+              IconButton(
+                icon: Icon(Icons.messenger, color: Colors.white),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => ChatListPage()),
+                  );
+                },
+              ),
+              if (_hasUnreadMessages) // Add notification dot
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    constraints: BoxConstraints(
+                      minWidth: 12,
+                      minHeight: 12,
+                    ),
+                  ),
+                ),
+            ],
           ),
         ],
       ),

@@ -145,28 +145,60 @@ class ReelItem extends StatefulWidget {
 
 class _ReelItemState extends State<ReelItem> {
   late VideoPlayerController _controller;
+  VideoPlayerController? _nextController;
   bool _isPlaying = true;
   bool _isLiked = false;
   int _likeCount = 0;
+  bool _isInitialized = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = VideoPlayerController.network(widget.reel['videoUrl'])
-      ..initialize().then((_) {
-        setState(() {});
-        _controller.play();
-        _controller.setLooping(true);
-      });
-    _isLiked =
-        (widget.reel['likedBy'] as Map?)?.containsKey(widget.currentUserId) ??
-            false;
-    _likeCount = widget.reel['likes'] ?? 0;
+    _initializeControllers();
+  }
+
+  Future<void> _initializeControllers() async {
+    // Initialize current video controller
+    _controller = VideoPlayerController.network(widget.reel['videoUrl']);
+
+    // Wait for current video to initialize
+    await _controller.initialize();
+    setState(() {
+      _isInitialized = true;
+    });
+    _controller.play();
+    _controller.setLooping(true);
+
+    // Immediately start loading next video if available
+    if (widget.reel['nextVideoUrl'] != null) {
+      _nextController =
+          VideoPlayerController.network(widget.reel['nextVideoUrl'])
+            ..initialize().then((_) {
+              // Preload the video by starting and immediately pausing it
+              _nextController?.play();
+              _nextController?.pause();
+            });
+    }
+  }
+
+  @override
+  void didUpdateWidget(ReelItem oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // If the video URL changes, reinitialize controllers
+    if (oldWidget.reel['videoUrl'] != widget.reel['videoUrl']) {
+      _disposeControllers();
+      _initializeControllers();
+    }
+  }
+
+  void _disposeControllers() {
+    _controller.dispose();
+    _nextController?.dispose();
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _disposeControllers();
     super.dispose();
   }
 
@@ -270,7 +302,7 @@ class _ReelItemState extends State<ReelItem> {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          _controller.value.isInitialized
+          _isInitialized
               ? FittedBox(
                   fit: BoxFit.cover,
                   child: SizedBox(
