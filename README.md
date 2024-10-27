@@ -49,6 +49,15 @@ flutter pub get
 flutter run
 ```
 
+## 💳 Razorpay Configuration
+
+InCampus uses Razorpay for handling payments. To set up Razorpay in your development environment:
+
+1. Sign up for a Razorpay account at [https://razorpay.com](https://razorpay.com)
+2. Obtain your API Key ID and API Key Secret from the Razorpay Dashboard
+3. Create a file named `razorpay_config.dart` in the `lib/config/` directory
+4. Add the following content to `razorpay_config.dart`:
+
 ## 🛠️ Technologies Used
 
 - Flutter
@@ -56,6 +65,7 @@ flutter run
 - CameraAwesome
 - Video Compress
 - Chewie (Video Player)
+- Razorpay (Payment Gateway)
 
 ## 🤝 Contributing
 
