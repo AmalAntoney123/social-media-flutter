@@ -181,9 +181,11 @@ class _VerificationScreenState extends State<VerificationScreen> {
                                 SizedBox(height: 16),
                                 ElevatedButton(
                                   onPressed: _startPayment,
-                                  child: Text('Pay and Get Verified'),
+                                  child: Text('Pay and Get Verified',
+                                      style: TextStyle(color: Colors.white)),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.blueAccent,
+                                    foregroundColor: Colors.white,
                                     padding: EdgeInsets.symmetric(
                                         horizontal: 32, vertical: 12),
                                   ),

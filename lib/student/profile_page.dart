@@ -31,6 +31,15 @@ class _ProfilePageState extends State<ProfilePage>
   final Color _surfaceColor = Color(0xFF1E1E1E);
   final Color _onSurfaceColor = Colors.white;
 
+  // Add new loading state
+  bool _profileImageLoaded = false;
+  bool _postsImagesLoaded = false;
+  bool _reelsImagesLoaded = false;
+
+  // Add image loading tracking
+  int _loadedPostImages = 0;
+  int _loadedReelImages = 0;
+
   @override
   void initState() {
     super.initState();
@@ -79,6 +88,7 @@ class _ProfilePageState extends State<ProfilePage>
               _posts = [];
             }
             _postsLoading = false;
+            _preloadImages(); // Add this line
           });
           print("Posts loaded: ${_posts.length}");
         }, onError: (error) {
@@ -212,11 +222,18 @@ class _ProfilePageState extends State<ProfilePage>
       padding: const EdgeInsets.all(16.0),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 40,
-            backgroundImage: NetworkImage(_userProfile['profilePicture'] ??
-                'https://via.placeholder.com/150'),
-          ),
+          _profileImageLoaded
+              ? CircleAvatar(
+                  radius: 40,
+                  backgroundImage: NetworkImage(
+                      _userProfile['profilePicture'] ??
+                          'https://via.placeholder.com/150'),
+                )
+              : Container(
+                  width: 80,
+                  height: 80,
+                  child: CircularProgressIndicator(),
+                ),
           SizedBox(width: 16),
           Expanded(
             child: Column(
@@ -234,7 +251,8 @@ class _ProfilePageState extends State<ProfilePage>
                     if (_userProfile['isVerified'] == true)
                       Padding(
                         padding: const EdgeInsets.only(left: 4.0),
-                        child: Icon(Icons.verified, color: Colors.blue, size: 20),
+                        child:
+                            Icon(Icons.verified, color: Colors.blue, size: 20),
                       ),
                   ],
                 ),
@@ -346,7 +364,7 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   Widget _buildPostsGrid() {
-    if (_postsLoading) {
+    if (_postsLoading || !_postsImagesLoaded) {
       return Center(child: CircularProgressIndicator());
     }
     if (_posts.isEmpty) {
@@ -384,7 +402,7 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   Widget _buildReelsGrid() {
-    if (_reelsLoading) {
+    if (_reelsLoading || !_reelsImagesLoaded) {
       return Center(child: CircularProgressIndicator());
     }
     if (_reels.isEmpty) {
@@ -483,7 +501,8 @@ class _ProfilePageState extends State<ProfilePage>
             ),
           ListTile(
             leading: Icon(Icons.verified, color: _onSurfaceColor),
-            title: Text('Get Verified', style: TextStyle(color: _onSurfaceColor)),
+            title:
+                Text('Get Verified', style: TextStyle(color: _onSurfaceColor)),
             onTap: () {
               Navigator.push(
                 context,
@@ -499,6 +518,53 @@ class _ProfilePageState extends State<ProfilePage>
         ],
       ),
     );
+  }
+
+  // Add new method to preload images
+  Future<void> _preloadImages() async {
+    // Preload profile image
+    if (_userProfile['profilePicture'] != null) {
+      final profileImageProvider =
+          NetworkImage(_userProfile['profilePicture']!);
+      await precacheImage(profileImageProvider, context);
+      setState(() => _profileImageLoaded = true);
+    } else {
+      setState(() => _profileImageLoaded = true);
+    }
+
+    // Preload post images
+    _loadedPostImages = 0;
+    for (var post in _posts) {
+      final imageProvider = NetworkImage(post['imageUrl']);
+      await precacheImage(imageProvider, context);
+      setState(() {
+        _loadedPostImages++;
+        if (_loadedPostImages == _posts.length) {
+          _postsImagesLoaded = true;
+        }
+      });
+    }
+    if (_posts.isEmpty) {
+      setState(() => _postsImagesLoaded = true);
+    }
+
+    // Preload reel thumbnails
+    _loadedReelImages = 0;
+    for (var reel in _reels) {
+      if (reel['thumbnailUrl'] != null) {
+        final imageProvider = NetworkImage(reel['thumbnailUrl']);
+        await precacheImage(imageProvider, context);
+        setState(() {
+          _loadedReelImages++;
+          if (_loadedReelImages == _reels.length) {
+            _reelsImagesLoaded = true;
+          }
+        });
+      }
+    }
+    if (_reels.isEmpty) {
+      setState(() => _reelsImagesLoaded = true);
+    }
   }
 
   @override

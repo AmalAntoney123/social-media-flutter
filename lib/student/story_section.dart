@@ -35,9 +35,23 @@ class StorySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Filter stories to only include friends' stories
-    final friendStories =
-        stories.where((story) => friendIds.contains(story['userId'])).toList();
+    // Filter stories to only include friends' stories and stories less than 24 hours old
+    final friendStories = stories.where((story) {
+      // Check if user is a friend
+      bool isFriend = friendIds.contains(story['userId']);
+
+      // Check if story is less than 24 hours old
+      bool isRecent = false;
+      if (story['timestamp'] != null) {
+        DateTime storyTime =
+            DateTime.fromMillisecondsSinceEpoch(story['timestamp']);
+        DateTime now = DateTime.now();
+        Duration difference = now.difference(storyTime);
+        isRecent = difference.inHours < 24;
+      }
+
+      return isFriend && isRecent;
+    }).toList();
 
     return Container(
       height: 90, // Reduced height

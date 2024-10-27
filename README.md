@@ -26,6 +26,20 @@ Stay updated with friend requests, likes, comments, and important campus news.
 ### 👤 Profile
 Customize your profile to showcase your interests, achievements, and campus involvement.
 
+### 👨‍💼 Administrative Features
+- User Management: Approve/disable user accounts
+- Department Management: Add and manage academic departments
+- Teacher Assignment: Assign class teachers to departments
+- Analytics Dashboard: View user statistics and department distribution
+- Role-based Access Control: Manage user roles and permissions
+
+### 👩‍🏫 Staff Features
+- Student Approvals: Review and approve student registrations
+- Class Management: Manage class rosters and student information
+- Community Moderation: Oversee and moderate student communities
+- Academic Updates: Share important academic announcements
+- Student Progress Tracking: Monitor student engagement and activities
+
 ## 🚀 Getting Started
 
 To get started with InCampus, follow these steps:
